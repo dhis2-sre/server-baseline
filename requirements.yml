@@ -1,0 +1,6 @@
+# The bootstrap role uses authorized_key, which ansible-core does not ship. Consumers should install
+# this alongside the roles:
+#
+#   ansible-galaxy collection install --requirements-file requirements.yml
+collections:
+  - name: ansible.posix
