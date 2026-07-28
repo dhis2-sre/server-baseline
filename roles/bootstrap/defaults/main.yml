@@ -26,3 +26,5 @@ bootstrap_packages:
   - gnupg
   - lsb-release
   - unattended-upgrades
+  # Required by the deb822_repository module used to add the Docker repository.
+  - python3-debian

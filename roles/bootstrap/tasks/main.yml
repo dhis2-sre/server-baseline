@@ -1,38 +1,43 @@
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: Install required packages
-  apt:
+  ansible.builtin.apt:
     name: "{{ bootstrap_packages }}"
     state: present
 
-- name: Add Docker GPG key
-  apt_key:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    state: present
-
-- name: Add Docker repository
-  apt_repository:
-    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+# deb822_repository replaces the apt_key and apt_repository pair those two modules are deprecated and
+# due for removal in ansible-core 2.25. It also writes the key to its own keyring rather than the
+# system wide one, so this repository can only ever sign its own packages. python3-debian is in
+# bootstrap_packages because this module needs it on the target.
+- name: Add the Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [ deb ]
+    uris: https://download.docker.com/linux/ubuntu
+    suites: [ "{{ ansible_facts['distribution_release'] }}" ]
+    components: [ stable ]
+    architectures: [ amd64 ]
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
     state: present
 
 - name: Install Docker and Compose
-  apt:
+  ansible.builtin.apt:
     name:
       - docker-ce
       - docker-ce-cli
       - containerd.io
       - docker-compose-plugin
     state: present
-    update_cache: yes
+    update_cache: true
 
-# Operator user: the account that owns deploy_dir and runs `make` / `sudo docker`.
+# Operator user: the account that owns deploy_dir and runs `sudo docker`.
 # By default this is the inventory ansible_user (already exists), so nothing is
 # created. Set docker_user to a dedicated name in group_vars/all.yml to have a
 # separate account provisioned (with a pre-hashed password and optional SSH key).
 - name: Assert a password is provided for a dedicated operator user
-  assert:
+  ansible.builtin.assert:
     that: docker_user_password is defined and docker_user_password | length > 0
     fail_msg: >-
       docker_user is set to a dedicated account ({{ docker_user }}) but
@@ -41,18 +46,18 @@
   when: docker_user != ansible_user
 
 - name: Create the operator user
-  user:
+  ansible.builtin.user:
     name: "{{ docker_user }}"
     password: "{{ docker_user_password }}"
     update_password: on_create
     groups: sudo
-    append: yes
+    append: true
     shell: /bin/bash
-    create_home: yes
+    create_home: true
   when: docker_user != ansible_user
 
 - name: Add the operator user's SSH key
-  authorized_key:
+  ansible.posix.authorized_key:
     user: "{{ docker_user }}"
     key: "{{ docker_user_ssh_key }}"
   when:
@@ -61,7 +66,7 @@
     - docker_user_ssh_key | length > 0
 
 - name: Ensure deploy directory exists
-  file:
+  ansible.builtin.file:
     path: "{{ deploy_dir }}"
     state: directory
     owner: "{{ docker_user }}"
@@ -69,7 +74,7 @@
     mode: '0755'
 
 - name: Enable and start Docker service
-  service:
+  ansible.builtin.service:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
