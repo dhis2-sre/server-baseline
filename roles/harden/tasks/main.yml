@@ -2,45 +2,53 @@
 # Modified for Docker environment
 
 - name: Update and upgrade apt packages
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
     upgrade: dist
 
 - name: Enable unattended-upgrades
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/apt/apt.conf.d/20auto-upgrades
     regexp: '^\s*\"(APT::Periodic::Unattended-Upgrade)\".*;'
     line: '"APT::Periodic::Unattended-Upgrade" "1";'
 
 # SSH Hardening
+#
+# Each of these validates the whole file with `sshd -t` before writing it, so a mistake cannot
+# produce a config that sshd refuses to load, and notifies a reload rather than a restart, so the
+# connection running this play survives. Without the notify the new settings would sit in the file
+# unapplied until something else restarted sshd, which is a reboot away and easy to mistake for
+# hardening that is already in effect.
 - name: Disable root login
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^PermitRootLogin'
     line: 'PermitRootLogin no'
     state: present
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
 
 - name: Disable password authentication
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^PasswordAuthentication'
     line: 'PasswordAuthentication no'
     state: present
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
 
 - name: Allow specific SSH users
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
+    regexp: '^AllowUsers'
     line: "AllowUsers {{ (allowed_ssh_users + [docker_user]) | unique | join(' ') }}"
     state: present
-
-# - name: Restart SSH service
-#   service:
-#     name: sshd
-#     state: restarted
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
 
 # Minimize Attack Surface
 - name: Remove unnecessary packages
-  apt:
+  ansible.builtin.apt:
     name:
       - telnet
       - ftp
@@ -52,7 +60,7 @@
 
 # Secure /tmp
 - name: Secure /tmp partition
-  mount:
+  ansible.posix.mount:
     path: /tmp
     src: tmpfs
     fstype: tmpfs
@@ -60,27 +68,27 @@
     state: present
 
 - name: Mount or remount /tmp with secure options
-  raw: |
+  ansible.builtin.raw: |
     if mountpoint -q /tmp; then
-      mount -o remount,defaults,noexec,nosuid,nodev /tmp
+      mount --options remount,defaults,noexec,nosuid,nodev /tmp
     else
-      mount -t tmpfs -o defaults,noexec,nosuid,nodev tmpfs /tmp
+      mount --types tmpfs --options defaults,noexec,nosuid,nodev tmpfs /tmp
     fi
   changed_when: false
 
 # Logging and Monitoring
 - name: Install fail2ban
-  apt:
+  ansible.builtin.apt:
     name: fail2ban
     state: present
 
 - name: Restart fail2ban
-  service:
+  ansible.builtin.service:
     name: fail2ban
     state: restarted
 
 - name: Set kernel parameters for hardening
-  sysctl:
+  ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
     state: present
@@ -115,44 +123,45 @@
     - {key: "net.ipv4.conf.all.secure_redirects", value: "0"}
     - {key: "net.ipv4.conf.default.secure_redirects", value: "0"}
 
-- name: Apply sysctl changes
-  command: sysctl -p
-
 # Docker-specific hardening
 - name: Configure subuid for user namespace remapping
   # Allocates UID range 100000-165535 for the user, enabling Docker to remap container UIDs
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/subuid
     line: "{{ docker_user }}:100000:65536"
-    create: yes
+    create: true
+    mode: '0644'
 
 - name: Configure subgid for user namespace remapping
   # Allocates GID range 100000-165535 for the user, enabling Docker to remap container GIDs
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/subgid
     line: "{{ docker_user }}:100000:65536"
-    create: yes
+    create: true
+    mode: '0644'
 
 - name: Install AppArmor utils and profiles
-  apt:
+  ansible.builtin.apt:
     name:
       - apparmor-utils
       - apparmor-profiles
     state: present
 
+# command rather than a shell pipe into grep, so there is no pipeline whose exit status has to be
+# reasoned about.
 - name: Check if Docker AppArmor profile is loaded
-  shell: apparmor_status | grep -q docker
-  register: apparmor_check
+  ansible.builtin.command: apparmor_status
+  register: harden_apparmor_status
   failed_when: false
   changed_when: false
 
 - name: Assert Docker AppArmor profile is loaded
-  assert:
-    that: apparmor_check.rc == 0
+  ansible.builtin.assert:
+    that: "'docker' in harden_apparmor_status.stdout"
     fail_msg: "Docker AppArmor profile is not loaded. Ensure AppArmor is configured for Docker security."
 
 - name: Configure Docker daemon for security
-  copy:
+  ansible.builtin.copy:
     dest: /etc/docker/daemon.json
     content: |
       {
@@ -165,10 +174,10 @@
         }
       }
     mode: '0644'
-  notify: restart docker
+  notify: Restart docker
 
 - name: Restrict Docker socket permissions
-  file:
+  ansible.builtin.file:
     path: /var/run/docker.sock
     owner: root
     group: docker
