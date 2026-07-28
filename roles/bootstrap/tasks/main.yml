@@ -4,16 +4,7 @@
 
 - name: Install required packages
   apt:
-    name:
-      - git
-      - curl
-      - make
-      - wget
-      - apt-transport-https
-      - ca-certificates
-      - gnupg
-      - lsb-release
-      - unattended-upgrades
+    name: "{{ bootstrap_packages }}"
     state: present
 
 - name: Add Docker GPG key
