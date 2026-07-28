@@ -1,16 +1,6 @@
 # server-baseline
 
-Ansible roles that turn a stock Ubuntu 24.04 host into a hardened Docker host. Shared by the projects
-that run DHIS2 workloads on plain servers, so the hardening has one implementation rather than one per
-repository:
-
-- [dhis2/docker-deployment](https://github.com/dhis2/docker-deployment) - the DHIS2 instance servers.
-- [dhis2-sre/dhis2-infrastructure](https://github.com/dhis2-sre/dhis2-infrastructure) -
-  `services/im-vm`, the Instance Manager control plane.
-
-Extracted from `server-tools/roles` in dhis2/docker-deployment with its history, so `git log` and
-`git blame` still explain why each rule is there. The `harden` role was originally adapted from
-dhis2-sre/microk8s-playbook.
+Ansible roles that turn a stock Ubuntu 24.04 host into a hardened Docker host.
 
 ## Roles
 
@@ -46,7 +36,7 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `docker_user_password` | none | bootstrap | Pre-hashed, required only when `docker_user` is a dedicated account. `!` locks the password, which is what a service account wants |
 | `docker_user_ssh_key` | none | bootstrap | Optional public key for a dedicated operator account |
 | `deploy_dir` | `/opt/dhis2` | bootstrap | Directory owned by `docker_user` |
-| `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because docker-deployment drives its stacks with a Makefile on the host |
+| `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |
 | `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | Host facing TCP ports |
 | `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | Host facing UDP ports. 51820 is WireGuard |
@@ -94,9 +84,9 @@ working examples.
 - `ansible-core`, plus the `ansible.posix` collection (see `requirements.yml`). `bootstrap` uses
   `authorized_key`, which core does not ship.
 - Ubuntu 24.04 on the target.
-- **Connect as a non-root account with sudo.** `harden` sets `PermitRootLogin no`, so a playbook run
-  as `root` succeeds once and then locks itself out. Create the account before the first run, for
-  example from cloud-init.
+- **Connect as a non-root account with sudo.** `harden` sets `PermitRootLogin no` and reloads sshd, so
+  a playbook run as `root` succeeds and then locks itself out. Create the account before the first
+  run, for example from cloud-init.
 
 ## Things to know before you run this
 
@@ -111,14 +101,14 @@ working examples.
 - **IPv6 is disabled** by the sysctl list. Override those two keys if you publish AAAA records.
 - **`icc: false`** applies to the default bridge only. Containers on user defined networks, which is
   what compose creates, still reach each other.
+- **The SSH tasks validate with `sshd -t`**, which needs `/run/sshd` to exist. Every booted host has
+  it, but a container or a chroot where sshd has never started does not, and the play fails there
+  rather than writing a config it could not check.
 
 ## Known issues
 
-- `bootstrap` uses `apt_key` and `apt_repository`, both deprecated and due for removal in
-  `ansible-core` 2.25. They need migrating to `deb822_repository`.
-- The roles are not clean under `ansible-lint` yet: no fully qualified module names, and `command`
-  tasks without `changed_when`. Left as extracted so the move is reviewable on its own.
-- No Galaxy metadata (`meta/main.yml`), so `ansible-galaxy role install` is not an option yet.
-- The inherited task files use short command line options (`iptables -L -v`, `mount -o`, `mountpoint -q`).
-  Left alone so this extraction stays byte identical to its origin and reviewable as a move; worth a
-  pass along with the two items above.
+- No Galaxy metadata (`meta/main.yml`), so `ansible-galaxy role install` is not an option. It also
+  wants a license, which this repository has yet to declare.
+- `var-naming[no-role-prefix]` is skipped in `.ansible-lint`. `docker_user`, `deploy_dir` and
+  `allowed_ssh_users` are the interface consumers configure, so they keep their names; variables
+  registered inside the roles do carry a role prefix.
