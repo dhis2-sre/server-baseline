@@ -1,0 +1,5 @@
+# The role names are not prefixed onto docker_user, deploy_dir and allowed_ssh_users on purpose:
+# those are the interface consumers configure, they are documented in the README, and two projects
+# already set them. Registered variables inside the roles do carry a prefix.
+skip_list:
+  - var-naming[no-role-prefix]

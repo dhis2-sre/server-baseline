@@ -19,6 +19,11 @@ repos:
     hooks:
       - id: yamllint
 
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v25.9.2
+    hooks:
+      - id: ansible-lint
+
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.9.1
     hooks:

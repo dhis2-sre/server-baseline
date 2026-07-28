@@ -26,14 +26,14 @@
 # services you choose.
 
 - name: Debug existing DOCKER-USER rules
-  ansible.builtin.command: iptables -L DOCKER-USER -v
-  register: docker_user_rules
+  ansible.builtin.command: iptables --list DOCKER-USER --verbose
+  register: firewall_existing_rules
   changed_when: false
   become: true
 
 - name: Print existing DOCKER-USER rules
   ansible.builtin.debug:
-    var: docker_user_rules.stdout_lines
+    var: firewall_existing_rules.stdout_lines
 
 - name: Allow established/related traffic in DOCKER-USER chain
   ansible.builtin.iptables:
@@ -97,14 +97,17 @@
 
 - name: Save iptables rules
   ansible.builtin.command: netfilter-persistent save
+  # Writes the rules to disk every run. There is nothing to compare against, so it is reported as
+  # changed rather than pretending otherwise.
+  changed_when: true
   become: true
 
 - name: Show final DOCKER-USER rules
-  ansible.builtin.command: iptables -L DOCKER-USER -v --line-numbers
-  register: final_docker_user_rules
+  ansible.builtin.command: iptables --list DOCKER-USER --verbose --line-numbers
+  register: firewall_final_rules
   changed_when: false
   become: true
 
 - name: Print final DOCKER-USER rules
   ansible.builtin.debug:
-    var: final_docker_user_rules.stdout_lines
+    var: firewall_final_rules.stdout_lines
