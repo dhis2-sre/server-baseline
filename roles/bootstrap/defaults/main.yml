@@ -1,0 +1,30 @@
+# Default infrastructure variables shared across roles.
+# bootstrap runs first, so these defaults are in scope for the firewall and
+# harden roles too. Override per deployment in group_vars/all.yml.
+
+# The operational user: owns deploy_dir and is the Docker user-namespace remap
+# target. Defaults to the inventory ansible_user.
+# NOTE: this user is NOT added to the (root-equivalent) `docker` group; it runs
+# docker via `sudo`.
+# To use a dedicated account instead, set docker_user (+ docker_user_password,
+# and optionally docker_user_ssh_key) in group_vars/all.yml.
+docker_user: "{{ ansible_user }}"
+
+# Directory owned by docker_user, where the consuming project keeps whatever it
+# deploys.
+deploy_dir: /opt/dhis2
+
+# `make` is here because dhis2/docker-deployment drives its stacks with a
+# Makefile on the host. Consumers that do not can trim the list.
+bootstrap_packages:
+  - git
+  - curl
+  - make
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - unattended-upgrades
+  # Required by the deb822_repository module used to add the Docker repository.
+  - python3-debian
