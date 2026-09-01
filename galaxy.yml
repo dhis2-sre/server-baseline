@@ -1,5 +1,5 @@
-namespace: dhis2
-name: sre
+namespace: sre
+name: server
 version: 1.0.0
 readme: README.md
 license:

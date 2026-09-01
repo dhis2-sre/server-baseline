@@ -7,18 +7,18 @@
   become: true
 
   roles:
-    - dhis2.sre.bootstrap
+    - sre.server.bootstrap
 
 - name: Firewall on its own
   hosts: all
   become: true
 
   roles:
-    - dhis2.sre.firewall
+    - sre.server.firewall
 
 - name: Harden on its own
   hosts: all
   become: true
 
   roles:
-    - dhis2.sre.harden
+    - sre.server.harden

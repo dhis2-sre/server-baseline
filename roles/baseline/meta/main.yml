@@ -19,9 +19,9 @@ galaxy_info:
 # and harden reconfigures the daemon and the host around both.
 #
 # Listing a role here rather than duplicating its tasks also means a consumer that runs, say,
-# dhis2.sre.bootstrap directly and dhis2.sre.baseline afterwards gets bootstrap once: Ansible skips
+# sre.server.bootstrap directly and sre.server.baseline afterwards gets bootstrap once: Ansible skips
 # a dependency that already ran in the same play with the same parameters.
 dependencies:
-  - role: dhis2.sre.bootstrap
-  - role: dhis2.sre.firewall
-  - role: dhis2.sre.harden
+  - role: sre.server.bootstrap
+  - role: sre.server.firewall
+  - role: sre.server.harden

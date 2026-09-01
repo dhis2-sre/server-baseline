@@ -11,11 +11,11 @@
 docker_user: "{{ ansible_user }}"
 
 # Directory owned by docker_user, where the consuming project keeps whatever it
-# deploys.
-deploy_dir: /opt/dhis2
+# deploys. Set it to wherever your project expects its checkout.
+deploy_dir: /opt/deploy
 
-# `make` is here because dhis2/docker-deployment drives its stacks with a
-# Makefile on the host. Consumers that do not can trim the list.
+# `make` is here because one consumer drives its compose stacks with a Makefile
+# on the host. Consumers that do not can trim the list.
 bootstrap_packages:
   - git
   - curl

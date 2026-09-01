@@ -1,29 +1,32 @@
 # server-baseline
 
-`dhis2.sre`, an Ansible collection that turns a stock Ubuntu 24.04 host into a hardened Docker host.
+`sre.server`, an Ansible collection that turns a stock Ubuntu 24.04 host into a hardened Docker host.
 
 It exists so that the projects deploying onto those hosts do not each carry their own copy of the
 same provisioning. They depend on a pinned version of this collection, apply the baseline, and are
 left with only the part that is actually theirs.
 
 ```text
-                     dhis2.sre
-        bootstrap  ->  firewall  ->  harden
-                         |
-                      baseline
-             /                       \
-    dhis2/docker-deployment      your project
-       DHIS2 compose stacks         whatever it deploys
+                       sre.server
+          bootstrap  ->  firewall  ->  harden
+                            |
+                         baseline
+              /             |             \
+        project A       project B       project C
+      its own roles   its own roles   its own roles
 ```
+
+Nothing in here knows what you deploy on top of it. Fork it, point `galaxy.yml` at your own
+namespace, and the same applies.
 
 ## Roles
 
 | Role | What it does |
 |---|---|
-| `dhis2.sre.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `dhis2.sre.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
-| `dhis2.sre.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
-| `dhis2.sre.baseline` | All three of the above, in that order. No tasks of its own |
+| `sre.server.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
+| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `sre.server.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
+| `sre.server.baseline` | All three of the above, in that order. No tasks of its own |
 
 The order matters: `bootstrap` installs the Docker Engine, `firewall` locks down the `DOCKER-USER`
 chain that installing it creates, and `harden` reconfigures the daemon and the host around both.
@@ -57,7 +60,7 @@ provision is one run rather than two:
   become: true
 
   roles:
-    - dhis2.sre.baseline
+    - sre.server.baseline
     - deploy
 ```
 
@@ -65,7 +68,7 @@ For a host with nothing project specific on it, the collection ships the play ab
 second role, addressable by name:
 
 ```bash
-ansible-playbook --inventory inventory.ini dhis2.sre.baseline
+ansible-playbook --inventory inventory.ini sre.server.baseline
 ```
 
 ### Taking only part of it
@@ -75,8 +78,8 @@ installation can say so:
 
 ```yaml
   roles:
-    - dhis2.sre.firewall
-    - dhis2.sre.harden
+    - sre.server.firewall
+    - sre.server.harden
 ```
 
 Both `bootstrap` and `harden` default `docker_user` to the inventory `ansible_user`, so they agree
@@ -85,9 +88,8 @@ whether they run together or separately.
 ### Without installing the collection
 
 `galaxy.yml` and `roles/` both sit at the repository root, so a pinned checkout on `roles_path`
-still works and the roles keep their bare names there. `dhis2-infrastructure` consumes them this
-way. Only `dhis2.sre.baseline` needs the collection installed, because it names its dependencies by
-their fully qualified names.
+still works and the roles keep their bare names there. Only `sre.server.baseline` needs the
+collection installed, because it names its dependencies by their fully qualified names.
 
 ```ini
 [defaults]
@@ -105,8 +107,8 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `docker_user` | inventory `ansible_user` | bootstrap, harden | Owns `deploy_dir` and is the user namespace remap target. Set it to a dedicated account to have one created |
 | `docker_user_password` | none | bootstrap | Pre-hashed, required only when `docker_user` is a dedicated account. `!` locks the password, which is what a service account wants |
 | `docker_user_ssh_key` | none | bootstrap | Optional public key for a dedicated operator account |
-| `deploy_dir` | `/opt/dhis2` | bootstrap | Directory owned by `docker_user` |
-| `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
+| `deploy_dir` | `/opt/deploy` | bootstrap | Directory owned by `docker_user`. Point it wherever your project expects its checkout |
+| `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its compose stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |
 | `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | Host facing TCP ports |
 | `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | Host facing UDP ports. 51820 is WireGuard |

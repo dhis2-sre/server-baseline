@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the `dhis2.sre` collection.
+All notable changes to the `sre.server` collection.
 
 The collection follows [semantic versioning](https://semver.org). A breaking change to a role's
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
@@ -13,16 +13,18 @@ consumers put on their `roles_path`.
 
 ### Added
 
-- `dhis2.sre.baseline`, a role that composes `bootstrap`, `firewall` and `harden` in that order.
-- `playbooks/baseline.yml`, runnable as `ansible-playbook dhis2.sre.baseline`.
+- `sre.server.baseline`, a role that composes `bootstrap`, `firewall` and `harden` in that order.
+- `playbooks/baseline.yml`, runnable as `ansible-playbook sre.server.baseline`.
 - Galaxy metadata and an Apache-2.0 licence, so the roles carry a licence and could be published.
 - `tests/run.sh`, which builds and installs the collection and syntax-checks the playbooks against
   the installed copy.
 
 ### Changed
 
-- The roles are addressed as `dhis2.sre.bootstrap`, `dhis2.sre.firewall` and `dhis2.sre.harden`
+- The roles are addressed as `sre.server.bootstrap`, `sre.server.firewall` and `sre.server.harden`
   once the collection is installed. Putting `roles/` on `roles_path` and using the bare names still
-  works, which is how `dhis2-infrastructure` consumes them.
+  works, so a consumer that already does that keeps working untouched.
 - `harden` defaults `docker_user` itself instead of borrowing the default `bootstrap` happened to
   leave in scope, so it can be run without `bootstrap`.
+- `deploy_dir` defaults to `/opt/deploy`. Nothing in the collection is specific to any one project
+  any more, so a consumer that wants a different directory sets it explicitly.

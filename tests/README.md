@@ -14,7 +14,7 @@ It needs `ansible-core` and network access, since installing the collection also
 It deliberately checks the things linting the working tree cannot:
 
 - `galaxy.yml` is valid and the collection builds and installs.
-- `dhis2.sre.baseline` resolves, and so do the three roles it depends on. In the working tree every
+- `sre.server.baseline` resolves, and so do the three roles it depends on. In the working tree every
   role also resolves by its bare directory name, so a wrong namespace goes unnoticed there.
 - Each role still works on its own, not only as part of the baseline.
 

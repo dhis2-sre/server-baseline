@@ -12,8 +12,8 @@ repos:
       - id: mixed-line-ending
       - id: check-merge-conflict
 
-  # Same configuration as dhis2/docker-deployment, so the roles keep passing the lint they passed
-  # before they were extracted.
+  # Same configuration as the project the roles were extracted from, so they keep passing the lint
+  # they passed before.
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1
     hooks:
