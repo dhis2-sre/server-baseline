@@ -1,0 +1,32 @@
+namespace: dhis2
+name: sre
+version: 1.0.0
+readme: README.md
+license:
+  - Apache-2.0
+authors:
+  - DHIS2 SRE <sre@dhis2.org>
+description: Turns a stock Ubuntu 24.04 host into a hardened Docker host.
+tags:
+  - docker
+  - firewall
+  - hardening
+  - infrastructure
+  - ubuntu
+repository: https://github.com/dhis2-sre/server-baseline
+documentation: https://github.com/dhis2-sre/server-baseline/blob/master/README.md
+issues: https://github.com/dhis2-sre/server-baseline/issues
+
+# authorized_key, mount and sysctl are not in ansible-core. Installing the collection pulls this in,
+# which is what requirements.yml has to do by hand for consumers that put the roles on roles_path
+# instead.
+dependencies:
+  ansible.posix: '>=1.5.0'
+
+# Everything that supports the repository but is not part of what consumers install.
+build_ignore:
+  - .ansible-lint
+  - .github
+  - .pre-commit-config.yaml
+  - .yamllint
+  - '*.tar.gz'

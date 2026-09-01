@@ -1,5 +1,9 @@
-# The bootstrap role uses authorized_key, which ansible-core does not ship. Consumers should install
-# this alongside the roles:
+# ansible.posix supplies authorized_key, mount and sysctl, which ansible-core does not ship.
+#
+# Installing the collection already pulls this in - it is declared in galaxy.yml under
+# `dependencies`, and ansible-galaxy resolves it. This file is for the other way of consuming these
+# roles, where a project puts roles/ on its roles_path instead of installing the collection, and so
+# has to install the dependency itself:
 #
 #   ansible-galaxy collection install --requirements-file requirements.yml
 collections:

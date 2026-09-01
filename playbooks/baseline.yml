@@ -1,0 +1,13 @@
+# The whole baseline, for consumers that have nothing else to run on the host. Addressable by name
+# once the collection is installed:
+#
+#   ansible-playbook --inventory inventory.ini dhis2.sre.baseline
+#
+# A project with its own roles should write its own play instead and put dhis2.sre.baseline first,
+# so the baseline and the application are one run rather than two.
+- name: Apply the DHIS2 SRE server baseline
+  hosts: all
+  become: true
+
+  roles:
+    - dhis2.sre.baseline

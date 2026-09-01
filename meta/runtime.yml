@@ -1,0 +1,2 @@
+# deb822_repository, which bootstrap uses to add the Docker repository, arrived in ansible-core 2.15.
+requires_ansible: '>=2.15.0'

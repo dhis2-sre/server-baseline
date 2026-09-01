@@ -1,0 +1,12 @@
+galaxy_info:
+  author: DHIS2 SRE
+  description: Base packages, Docker Engine, the operator account and the deploy directory.
+  license: Apache-2.0
+  min_ansible_version: '2.15'
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - docker
+    - ubuntu

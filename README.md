@@ -1,30 +1,100 @@
 # server-baseline
 
-Ansible roles that turn a stock Ubuntu 24.04 host into a hardened Docker host.
+`dhis2.sre`, an Ansible collection that turns a stock Ubuntu 24.04 host into a hardened Docker host.
+
+It exists so that the projects deploying onto those hosts do not each carry their own copy of the
+same provisioning. They depend on a pinned version of this collection, apply the baseline, and are
+left with only the part that is actually theirs.
+
+```text
+                     dhis2.sre
+        bootstrap  ->  firewall  ->  harden
+                         |
+                      baseline
+             /                       \
+    dhis2/docker-deployment      your project
+       DHIS2 compose stacks         whatever it deploys
+```
 
 ## Roles
 
-Run them in this order, then whatever is specific to your project:
-
 | Role | What it does |
 |---|---|
-| `bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
-| `harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
+| `dhis2.sre.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
+| `dhis2.sre.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `dhis2.sre.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
+| `dhis2.sre.baseline` | All three of the above, in that order. No tasks of its own |
+
+The order matters: `bootstrap` installs the Docker Engine, `firewall` locks down the `DOCKER-USER`
+chain that installing it creates, and `harden` reconfigures the daemon and the host around both.
 
 `firewall` exists because Docker bypasses the host's `INPUT` chain for published container ports, so
 host level rules never see that traffic. Do not put UFW or another frontend alongside it.
 
+## Consuming it
+
+Declare the collection in your project's `requirements.yml`, pinned to a tag:
+
 ```yaml
-- name: Provision a Docker host
+collections:
+  - name: https://github.com/dhis2-sre/server-baseline.git
+    type: git
+    version: v1.0.0
+```
+
+Install it, and the `ansible.posix` dependency it declares comes with it:
+
+```bash
+ansible-galaxy collection install --requirements-file requirements.yml
+```
+
+Then put the baseline in front of whatever your project does to the host, in one play, so a
+provision is one run rather than two:
+
+```yaml
+- name: Provision and deploy
   hosts: all
   become: true
 
   roles:
-    - bootstrap
-    - firewall
-    - harden
+    - dhis2.sre.baseline
+    - deploy
 ```
+
+For a host with nothing project specific on it, the collection ships the play above without the
+second role, addressable by name:
+
+```bash
+ansible-playbook --inventory inventory.ini dhis2.sre.baseline
+```
+
+### Taking only part of it
+
+The roles are independent, so a project that wants the firewall but manages its own Docker
+installation can say so:
+
+```yaml
+  roles:
+    - dhis2.sre.firewall
+    - dhis2.sre.harden
+```
+
+Both `bootstrap` and `harden` default `docker_user` to the inventory `ansible_user`, so they agree
+whether they run together or separately.
+
+### Without installing the collection
+
+`galaxy.yml` and `roles/` both sit at the repository root, so a pinned checkout on `roles_path`
+still works and the roles keep their bare names there. `dhis2-infrastructure` consumes them this
+way. Only `dhis2.sre.baseline` needs the collection installed, because it names its dependencies by
+their fully qualified names.
+
+```ini
+[defaults]
+roles_path = ./roles:./external/server-baseline/roles
+```
+
+That route does not resolve `ansible.posix`, so install `requirements.yml` alongside it.
 
 ## Variables
 
@@ -32,7 +102,7 @@ Every variable has a default. Override in `group_vars/all.yml`.
 
 | Variable | Default | Role | Purpose |
 |---|---|---|---|
-| `docker_user` | inventory `ansible_user` | bootstrap | Owns `deploy_dir` and is the user namespace remap target. Set it to a dedicated account to have one created |
+| `docker_user` | inventory `ansible_user` | bootstrap, harden | Owns `deploy_dir` and is the user namespace remap target. Set it to a dedicated account to have one created |
 | `docker_user_password` | none | bootstrap | Pre-hashed, required only when `docker_user` is a dedicated account. `!` locks the password, which is what a service account wants |
 | `docker_user_ssh_key` | none | bootstrap | Optional public key for a dedicated operator account |
 | `deploy_dir` | `/opt/dhis2` | bootstrap | Directory owned by `docker_user` |
@@ -44,45 +114,24 @@ Every variable has a default. Override in `group_vars/all.yml`.
 Operators are deliberately **not** added to the root equivalent `docker` group. Give them a scoped
 `sudo` rule for the command they need instead.
 
-## Consuming it
+## Versioning
 
-These are plain roles, not a collection, so the simplest integration is a pinned checkout on the
-`roles_path`. `ansible.cfg`:
+The collection is versioned independently of anything consuming it, following semantic versioning,
+and every release is tagged `vX.Y.Z`. A change to what a role does to a host, or to the variables it
+reads, is a major version, so a consumer pinned to `v1.x` can take a patch without rereading its
+`group_vars`. See [CHANGELOG.md](CHANGELOG.md).
 
-```ini
-[defaults]
-roles_path = ./roles:./external/server-baseline/roles
-```
+**Pin a tag, not a branch.** An unpinned `main` means the hardening applied to production can change
+between two runs of the same playbook, without anything in the consuming repository changing.
 
-And a step that pins a commit rather than a branch, so the hardening cannot change under you between
-two runs of the same playbook. The repository is small, so re-cloning is simpler than reconciling an
-existing checkout, and it leaves no stale state:
-
-```make
-SERVER_BASELINE_URL ?= https://github.com/dhis2-sre/server-baseline.git
-SERVER_BASELINE_REF ?= <commit>
-
-roles:
-	rm -rf external/server-baseline
-	git clone --quiet --no-checkout $(SERVER_BASELINE_URL) external/server-baseline
-	git -C external/server-baseline checkout --quiet $(SERVER_BASELINE_REF)
-	ansible-galaxy collection install --requirements-file external/server-baseline/requirements.yml
-```
-
-Both variables are overridable, and `git clone` takes a path as well as a URL, so trying a change
-before pushing it needs no extra machinery:
-
-```bash
-make roles SERVER_BASELINE_URL=/path/to/server-baseline SERVER_BASELINE_REF=my-branch
-```
-
-`services/im-vm/ansible` in dhis2-infrastructure and `server-tools` in dhis2/docker-deployment are
-working examples.
+To cut a release: bump `version` in `galaxy.yml`, write the `CHANGELOG.md` entry, merge, then tag
+the merge commit `vX.Y.Z` and push the tag. CI refuses a tag that disagrees with `galaxy.yml`, then
+builds the collection and attaches the tarball to a GitHub release.
 
 ## Requirements
 
-- `ansible-core`, plus the `ansible.posix` collection (see `requirements.yml`). `bootstrap` uses
-  `authorized_key`, which core does not ship.
+- `ansible-core` 2.15 or newer on the control machine, plus the `ansible.posix` collection.
+  Installing this collection pulls it in; a `roles_path` checkout has to install `requirements.yml`.
 - Ubuntu 24.04 on the target.
 - **Connect as a non-root account with sudo.** `harden` sets `PermitRootLogin no` and reloads sshd, so
   a playbook run as `root` succeeds and then locks itself out. Create the account before the first
@@ -105,10 +154,22 @@ working examples.
   it, but a container or a chroot where sshd has never started does not, and the play fails there
   rather than writing a config it could not check.
 
+## Development
+
+`tests/run.sh` builds the collection, installs it into a temporary directory, and syntax-checks the
+playbooks against the installed copy. See [tests/README.md](tests/README.md) for what that does and
+does not prove. Lint with the same hooks CI runs:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Known issues
 
-- No Galaxy metadata (`meta/main.yml`), so `ansible-galaxy role install` is not an option. It also
-  wants a license, which this repository has yet to declare.
+- The collection is not published to the Ansible Galaxy hub. Consumers install it from the git tag,
+  which is what the `requirements.yml` above does.
 - `var-naming[no-role-prefix]` is skipped in `.ansible-lint`. `docker_user`, `deploy_dir` and
   `allowed_ssh_users` are the interface consumers configure, so they keep their names; variables
   registered inside the roles do carry a role prefix.
+- Nothing applies the roles to a real host in CI. `tests/run.sh` stops at a syntax check, so
+  verifying a change against a clean Ubuntu 24.04 VM is still manual.
