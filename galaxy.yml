@@ -5,7 +5,7 @@ readme: README.md
 license:
   - Apache-2.0
 authors:
-  - DHIS2 SRE <sre@dhis2.org>
+  - DHIS2 SRE <devops@dhis2.org>
 description: Turns a stock Ubuntu 24.04 host into a hardened Docker host.
 tags:
   - docker
