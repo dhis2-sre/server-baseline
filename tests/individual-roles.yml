@@ -1,0 +1,24 @@
+# Each role on its own, which is the half of the contract playbooks/baseline.yml does not cover: a
+# consumer that wants only the firewall, or only the hardening, must not have to take the rest with
+# it. This is syntax-checked, never applied - three separate plays is not an order anyone should
+# provision in.
+- name: Bootstrap on its own
+  hosts: all
+  become: true
+
+  roles:
+    - sre.server.bootstrap
+
+- name: Firewall on its own
+  hosts: all
+  become: true
+
+  roles:
+    - sre.server.firewall
+
+- name: Harden on its own
+  hosts: all
+  become: true
+
+  roles:
+    - sre.server.harden

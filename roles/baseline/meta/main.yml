@@ -1,0 +1,27 @@
+galaxy_info:
+  author: DHIS2 SRE
+  description: The complete server baseline - bootstrap, then firewall, then harden.
+  license: Apache-2.0
+  min_ansible_version: '2.15'
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - docker
+    - firewall
+    - hardening
+    - ubuntu
+
+# The composition itself, which is why this role has no tasks of its own. Ansible runs dependencies
+# in the order they are listed and before the role's own tasks, and the order matters: bootstrap
+# installs the Docker Engine, firewall locks down the DOCKER-USER chain that installing it creates,
+# and harden reconfigures the daemon and the host around both.
+#
+# Listing a role here rather than duplicating its tasks also means a consumer that runs, say,
+# sre.server.bootstrap directly and sre.server.baseline afterwards gets bootstrap once: Ansible skips
+# a dependency that already ran in the same play with the same parameters.
+dependencies:
+  - role: sre.server.bootstrap
+  - role: sre.server.firewall
+  - role: sre.server.harden

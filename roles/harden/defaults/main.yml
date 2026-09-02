@@ -1,5 +1,12 @@
-# Default hardening configuration. Override per deployment in group_vars/all.yml.
+# Defaults for the harden role. Override per deployment in group_vars/all.yml.
 
 # Users permitted to log in over SSH (AllowUsers directive).
 allowed_ssh_users:
   - ubuntu
+
+# The user namespace remap target written to /etc/subuid, /etc/subgid and
+# /etc/docker/daemon.json, and appended to allowed_ssh_users.
+# Repeated from the bootstrap role's defaults, with the same value, so that this
+# role can be run on its own. When both roles run, they resolve to whatever
+# group_vars sets, or to the same default when it sets nothing.
+docker_user: "{{ ansible_user }}"

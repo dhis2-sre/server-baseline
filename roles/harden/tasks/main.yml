@@ -1,5 +1,5 @@
 # Adapted from https://github.com/dhis2-sre/microk8s-playbook/blob/master/playbooks/harden.yaml
-# Modified for Docker environment
+# Modified for a Docker host
 
 - name: Update and upgrade apt packages
   ansible.builtin.apt:

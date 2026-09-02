@@ -1,0 +1,13 @@
+# The whole baseline, for consumers that have nothing else to run on the host. Addressable by name
+# once the collection is installed:
+#
+#   ansible-playbook --inventory inventory.ini sre.server.baseline
+#
+# A project with its own roles should write its own play instead and put sre.server.baseline first,
+# so the baseline and the application are one run rather than two.
+- name: Apply the server baseline
+  hosts: all
+  become: true
+
+  roles:
+    - sre.server.baseline

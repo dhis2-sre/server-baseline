@@ -6,8 +6,8 @@ on:
     branches: [ master ]
 
 jobs:
-  validate:
-    name: Validate
+  lint:
+    name: Lint
     runs-on: ubuntu-24.04
 
     steps:
@@ -22,3 +22,21 @@ jobs:
       # yamllint and ansible-lint, the same hooks a committer runs locally. ansible-lint has to pass
       # at its production profile, which is what keeps the roles idiomatic as they change.
       - uses: pre-commit/action@v3.0.1
+
+  collection:
+    name: Collection
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - run: pip install ansible-core
+
+      # Builds and installs the collection and syntax-checks the playbooks against the installed
+      # copy, which is the only place the fully qualified role names have to resolve. Linting the
+      # working tree cannot catch a wrong namespace, because there the bare names resolve too.
+      - run: tests/run.sh
