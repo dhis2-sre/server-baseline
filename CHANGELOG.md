@@ -6,6 +6,14 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## 1.0.1
+
+### Fixed
+
+- `harden` runs its AppArmor status probe with `check_mode: false`. The probe is a `command`, which
+  ansible skips under `--check`, leaving the assert after it to read a registered result that has no
+  `stdout` and fail.
+
 ## 1.0.0
 
 First release as an Ansible collection. Everything before this was a plain roles repository that
