@@ -166,6 +166,9 @@
   register: harden_apparmor_status
   failed_when: false
   changed_when: false
+  # Reads nothing but the kernel's own view, so it is safe to run under --check, where the assert
+  # below needs its stdout.
+  check_mode: false
 
 - name: Assert Docker AppArmor profile is loaded
   ansible.builtin.assert:
