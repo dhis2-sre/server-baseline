@@ -140,6 +140,9 @@
   # Allocates UID range 100000-165535 for the user, enabling Docker to remap container UIDs
   ansible.builtin.lineinfile:
     path: /etc/subuid
+    # Matches any existing entry for the user, so one with a different range is replaced rather
+    # than left alongside a second entry.
+    regexp: "^{{ docker_user | regex_escape }}:"
     line: "{{ docker_user }}:100000:65536"
     create: true
     mode: '0644'
@@ -148,6 +151,9 @@
   # Allocates GID range 100000-165535 for the user, enabling Docker to remap container GIDs
   ansible.builtin.lineinfile:
     path: /etc/subgid
+    # Matches any existing entry for the user, so one with a different range is replaced rather
+    # than left alongside a second entry.
+    regexp: "^{{ docker_user | regex_escape }}:"
     line: "{{ docker_user }}:100000:65536"
     create: true
     mode: '0644'

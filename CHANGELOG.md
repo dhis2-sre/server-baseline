@@ -6,6 +6,14 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Fixed
+
+- `harden` replaces an existing `/etc/subuid` or `/etc/subgid` entry for `docker_user` instead of
+  adding a second one beside it. `useradd` writes an entry for each new user, and wherever its range
+  was not `100000:65536` the role left the user with two ranges (#5).
+
 ## 1.0.1
 
 ### Fixed
