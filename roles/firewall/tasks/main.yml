@@ -18,7 +18,9 @@
 #     default bridge subnets that Docker might create).
 #  3. Explicitly allow only the host-facing ports we want open
 #     (`firewall_allowed_ports`, e.g. 22, 80, 443).
-#  4. Drop all other traffic at the end (default deny).
+#  4. Drop all other traffic at the end (default deny). The allow rules are
+#     inserted at the top of the chain, so one added on a later run still lands
+#     ahead of this drop.
 #  5. Save rules so they persist across reboots (`netfilter-persistent`).
 #
 # Effectively, this gives you a "default deny" firewall posture while still
@@ -52,6 +54,7 @@
     source: 172.16.0.0/12
     jump: ACCEPT
     state: present
+    action: insert
     comment: Allow all Docker containers. The 172.16.0.0/12 range covers all default Docker bridge networks (172.16.0.0–172.31.255.255) so future containers on new networks will automatically be allowed.
     ip_version: ipv4
   become: true
@@ -63,6 +66,7 @@
     destination_port: "{{ item }}"
     jump: ACCEPT
     state: present
+    action: insert
     comment: "Allow host port {{ item }}"
     ip_version: ipv4
   loop: "{{ firewall_allowed_ports }}"
@@ -75,6 +79,7 @@
     destination_port: "{{ item }}"
     jump: ACCEPT
     state: present
+    action: insert
     comment: "Allow host UDP port {{ item }}"
     ip_version: ipv4
   loop: "{{ firewall_allowed_udp_ports | default([]) }}"
@@ -85,6 +90,8 @@
     chain: DOCKER-USER
     jump: DROP
     state: present
+    # Appended, unlike the allow rules above, so it sits after them as the last rule in the chain.
+    action: append
     comment: "Default drop"
     ip_version: ipv4
   become: true

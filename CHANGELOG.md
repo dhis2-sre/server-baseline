@@ -6,6 +6,14 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Fixed
+
+- `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
+  added to `firewall_allowed_ports` or `firewall_allowed_udp_ports` on a later run lands ahead of the
+  default drop rather than after it, where it never matched (#4).
+
 ## 1.0.1
 
 ### Fixed
