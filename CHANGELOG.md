@@ -6,6 +6,29 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Fixed
+
+- `harden` merges its Docker daemon settings (`userns-remap`, `icc`, `log-driver`, `log-opts`) into
+  `/etc/docker/daemon.json` instead of replacing the file, so settings it does not manage, such as
+  `data-root` or `registry-mirrors`, survive a run (#6). The hardening keys still win. Existing
+  `log-opts` are kept when the driver was already `json-file`, and dropped otherwise, because
+  dockerd will not start with options `json-file` does not know. A file that is not a JSON object
+  now stops the role instead of being overwritten.
+
+### Changed
+
+- The first run after upgrading rewrites `daemon.json` with sorted keys, so Docker restarts once on
+  each host even where the settings are unchanged.
+
+### Added
+
+- `harden_docker_daemon_config`, the path the Docker daemon settings are merged into. It defaults
+  to `/etc/docker/daemon.json` and exists for the tests.
+- `tests/docker-daemon.yml`, run by `tests/run.sh`, which applies those tasks to a scratch file and
+  checks the result. It is the suite's first test that applies anything.
+
 ## 1.0.1
 
 ### Fixed

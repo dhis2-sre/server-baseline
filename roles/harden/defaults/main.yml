@@ -10,3 +10,6 @@ allowed_ssh_users:
 # role can be run on its own. When both roles run, they resolve to whatever
 # group_vars sets, or to the same default when it sets nothing.
 docker_user: "{{ ansible_user }}"
+
+# The Docker daemon config the hardening keys are merged into. Only the tests point it elsewhere.
+harden_docker_daemon_config: /etc/docker/daemon.json

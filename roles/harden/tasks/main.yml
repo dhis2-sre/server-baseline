@@ -176,20 +176,7 @@
     fail_msg: "Docker AppArmor profile is not loaded. Ensure AppArmor is configured for Docker security."
 
 - name: Configure Docker daemon for security
-  ansible.builtin.copy:
-    dest: /etc/docker/daemon.json
-    content: |
-      {
-        "userns-remap": "{{ docker_user }}",
-        "icc": false,
-        "log-driver": "json-file",
-        "log-opts": {
-          "max-size": "10m",
-          "max-file": "3"
-        }
-      }
-    mode: '0644'
-  notify: Restart docker
+  ansible.builtin.include_tasks: docker_daemon.yml
 
 - name: Restrict Docker socket permissions
   ansible.builtin.file:
