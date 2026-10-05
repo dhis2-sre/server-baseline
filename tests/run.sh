@@ -24,3 +24,8 @@ export ANSIBLE_COLLECTIONS_PATH="$work_dir/collections"
 # relative to the working tree fails here.
 ansible-playbook --syntax-check --inventory "$repo_root/tests/inventory.ini" sre.server.baseline
 ansible-playbook --syntax-check --inventory "$repo_root/tests/inventory.ini" "$repo_root/tests/individual-roles.yml"
+
+# The one behaviour test: applies the harden role's daemon.json tasks to a scratch file on this
+# machine, through the installed collection like the checks above. No inventory, so it runs against
+# the implicit localhost with the controller's own Python.
+ANSIBLE_LOCALHOST_WARNING=false ansible-playbook "$repo_root/tests/docker-daemon.yml"

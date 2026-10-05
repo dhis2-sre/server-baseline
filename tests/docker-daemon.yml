@@ -1,0 +1,123 @@
+# Applies the harden role's daemon.json tasks to a scratch file and checks what they write: that the
+# hardening keys are enforced, that every other key already in the file survives (#6), and that a
+# second run changes nothing. Runs on the controller, needs no root and never touches
+# /etc/docker/daemon.json.
+#
+# The tasks notify Restart docker, which would restart the daemon on whatever runs this. The play
+# ends with meta: end_play, which drops handlers that are still pending, so it never runs.
+- name: Docker daemon config is merged, not replaced
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    docker_user: dockremap
+    harden_docker_daemon_config: "{{ docker_daemon_test_dir.path }}/daemon.json"
+    docker_daemon_written: "{{ lookup('ansible.builtin.file', harden_docker_daemon_config) | from_json }}"
+
+  tasks:
+    - name: Create a scratch directory
+      ansible.builtin.tempfile:
+        state: directory
+      register: docker_daemon_test_dir
+
+    - name: Run the cases
+      block:
+        - name: Seed a config with settings of its own and a weakened hardening key
+          ansible.builtin.copy:
+            dest: "{{ harden_docker_daemon_config }}"
+            content: |
+              {"data-root": "/mnt/docker-data", "registry-mirrors": ["https://mirror.example"],
+               "icc": true, "log-opts": {"labels": "app"}}
+            mode: '0644'
+
+        - name: Apply the daemon.json tasks
+          ansible.builtin.include_role:
+            name: sre.server.harden
+            tasks_from: docker_daemon
+
+        - name: Other settings survive and the hardening keys are enforced
+          ansible.builtin.assert:
+            that:
+              - harden_docker_daemon_result is changed
+              - docker_daemon_written['data-root'] == '/mnt/docker-data'
+              - docker_daemon_written['registry-mirrors'] == ['https://mirror.example']
+              - docker_daemon_written['log-opts']['labels'] == 'app'
+              - docker_daemon_written['icc'] == false
+              - docker_daemon_written['userns-remap'] == 'dockremap'
+              - docker_daemon_written['log-driver'] == 'json-file'
+              - docker_daemon_written['log-opts']['max-size'] == '10m'
+              - docker_daemon_written['log-opts']['max-file'] == '3'
+
+        - name: Apply the daemon.json tasks again
+          ansible.builtin.include_role:
+            name: sre.server.harden
+            tasks_from: docker_daemon
+
+        - name: A second run changes nothing, so it would not restart Docker
+          ansible.builtin.assert:
+            that: harden_docker_daemon_result is not changed
+
+        - name: Seed a config written for another log driver
+          ansible.builtin.copy:
+            dest: "{{ harden_docker_daemon_config }}"
+            content: '{"data-root": "/mnt/docker-data", "log-driver": "syslog", "log-opts": {"syslog-address": "udp://logs:514"}}'
+            mode: '0644'
+
+        - name: Apply the daemon.json tasks
+          ansible.builtin.include_role:
+            name: sre.server.harden
+            tasks_from: docker_daemon
+
+        - name: The other driver's options are dropped, since json-file would refuse them
+          ansible.builtin.assert:
+            that:
+              - docker_daemon_written['data-root'] == '/mnt/docker-data'
+              - docker_daemon_written['log-driver'] == 'json-file'
+              - "docker_daemon_written['log-opts'] == {'max-size': '10m', 'max-file': '3'}"
+
+        - name: Remove the config
+          ansible.builtin.file:
+            path: "{{ harden_docker_daemon_config }}"
+            state: absent
+
+        - name: Apply the daemon.json tasks
+          ansible.builtin.include_role:
+            name: sre.server.harden
+            tasks_from: docker_daemon
+
+        - name: A missing config is created with the hardening keys alone
+          ansible.builtin.assert:
+            that: docker_daemon_written | list | sort == ['icc', 'log-driver', 'log-opts', 'userns-remap']
+
+        - name: Empty the config
+          ansible.builtin.copy:
+            dest: "{{ harden_docker_daemon_config }}"
+            content: ""
+            mode: '0644'
+
+        - name: Apply the daemon.json tasks
+          ansible.builtin.include_role:
+            name: sre.server.harden
+            tasks_from: docker_daemon
+
+        - name: An empty config is treated as an empty object
+          ansible.builtin.assert:
+            that: docker_daemon_written | list | sort == ['icc', 'log-driver', 'log-opts', 'userns-remap']
+
+        - name: Stops on a config that is not a JSON object
+          ansible.builtin.include_tasks: docker-daemon-rejects.yml
+          loop:
+            - '{"data-root": "/mnt/docker-data",'
+            - '["not", "an", "object"]'
+          loop_control:
+            loop_var: docker_daemon_bad_content
+
+      always:
+        - name: Remove the scratch directory
+          ansible.builtin.file:
+            path: "{{ docker_daemon_test_dir.path }}"
+            state: absent
+
+    - name: End the play without running the pending Restart docker handler
+      ansible.builtin.meta: end_play
