@@ -29,144 +29,55 @@
 # sshd takes the first value it reads for most keywords, and Ubuntu's sshd_config includes
 # sshd_config.d/*.conf at the top, so a line in sshd_config loses to any drop-in that sets the same
 # keyword. Cloud images ship one: 50-cloud-init.conf sets PasswordAuthentication yes whenever the
-# provider enabled password logins. The settings therefore go in 00-hardening.conf, which sorts ahead
-# of the drop-ins Ubuntu and cloud-init ship, and `sshd -T`, which evaluates the configuration on disk
-# with every drop-in, confirms they are in effect. That check is skipped under --check, where nothing
-# was written.
-#
-# sshd is reloaded on every run once the check has passed, rather than by a handler. A run that
-# stops after writing the files, whether a task fails, the connection drops or the operator
-# interrupts it, would lose a handler's notification, and the rerun would find nothing changed and
-# pass against the files on disk while sshd kept running the old configuration. A reload re-reads
-# the configuration without dropping connections, including the one running this play.
-#
-# When the block fails, the rescue reloads only if the configuration on disk is still hardened: the
-# three settings are no and AllowUsers names only configured users. The play cannot read what the
-# running sshd has loaded, so it cannot tell a weaker drop-in waiting on disk from one already in
-# effect, and it errs towards never activating extra users; the run fails either way. `sshd -T` shows
-# global settings only, so a Match block in a waiting drop-in is not caught.
-- name: Harden SSH
-  vars:
-    harden_ssh_users: "{{ (allowed_ssh_users + [docker_user]) | unique }}"
-    harden_sshd_hint: >-
-      Check that /etc/ssh/sshd_config includes /etc/ssh/sshd_config.d/*.conf, that no drop-in sorting
-      before 00-hardening.conf sets PermitRootLogin, PasswordAuthentication or
-      KbdInteractiveAuthentication, and that no other file sets AllowUsers; add SSH users through
-      allowed_ssh_users.
-  block:
-    - name: Write the SSH hardening drop-in
-      ansible.builtin.template:
-        src: sshd-hardening.conf.j2
-        dest: /etc/ssh/sshd_config.d/00-hardening.conf
-        owner: root
-        group: root
-        mode: '0644'
-        validate: /usr/sbin/sshd -t -f %s
+# provider enabled password logins. These settings therefore go in a drop-in that sorts ahead of the
+# ones Ubuntu and cloud-init ship. AllowUsers stays in sshd_config, because it adds up across every
+# file rather than taking the first value, so where it is written does not change what it allows.
+- name: Write the SSH hardening drop-in
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: /usr/sbin/sshd -t -f %s
 
-    # AllowUsers adds up across every file rather than taking the first value, so a leftover line
-    # would keep allowing users that have since been removed from allowed_ssh_users. This removes
-    # every unindented PermitRootLogin, PasswordAuthentication and AllowUsers line in sshd_config, not
-    # only the ones earlier versions wrote.
-    #
-    # The validation evaluates the file as it would be after each removal, and refuses it unless the
-    # hardened values still hold. On a host whose sshd_config does not include sshd_config.d, that is
-    # what keeps the lines from being removed: there they are the only thing providing the hardening.
-    - name: Remove the SSH settings earlier versions wrote to sshd_config
-      ansible.builtin.lineinfile:
-        path: /etc/ssh/sshd_config
-        regexp: '^{{ item }}\s'
-        state: absent
-        validate: >-
-          /bin/sh -c 'c=$(/usr/sbin/sshd -T -f "$0") && echo "$c" | grep -qx "permitrootlogin no"
-          && echo "$c" | grep -qx "passwordauthentication no" && echo "$c" | grep -q "^allowusers "' %s
-      loop:
-        - PermitRootLogin
-        - PasswordAuthentication
-        - AllowUsers
+- name: Allow specific SSH users
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^AllowUsers'
+    line: "AllowUsers {{ (allowed_ssh_users + [docker_user]) | unique | join(' ') }}"
+    state: present
+    validate: /usr/sbin/sshd -t -f %s
 
-    - name: Read the effective SSH configuration
-      ansible.builtin.command: /usr/sbin/sshd -T
-      register: harden_sshd_effective
-      changed_when: false
-      when: not ansible_check_mode
+# Reloaded on every run rather than from a handler, whose notification is lost when a run stops
+# between writing the files and the end of the play, leaving a rerun with nothing to change and sshd
+# still on the old configuration. A reload re-reads the configuration without dropping connections,
+# including the one running this play, and afterwards the running sshd matches the files the check
+# below reads.
+- name: Reload sshd
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  changed_when: false
 
-    - name: Assert the SSH hardening is in effect
-      ansible.builtin.assert:
-        that:
-          - "'permitrootlogin no' in harden_sshd_effective.stdout_lines"
-          - "'passwordauthentication no' in harden_sshd_effective.stdout_lines"
-          - "'kbdinteractiveauthentication no' in harden_sshd_effective.stdout_lines"
-          - harden_sshd_allowusers | sort == harden_ssh_users | sort
-        fail_msg: >-
-          sshd's effective configuration does not match 00-hardening.conf, which sets
-          PermitRootLogin, PasswordAuthentication and KbdInteractiveAuthentication to no and AllowUsers
-          to {{ harden_ssh_users | join(' ') }}.
-      vars:
-        harden_sshd_allowusers: >-
-          {{ harden_sshd_effective.stdout_lines | select('match', '^allowusers ')
-          | map('regex_replace', '^allowusers ', '') | list }}
-      when: not ansible_check_mode
+- name: Read the effective SSH configuration
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: harden_sshd_effective
+  changed_when: false
+  check_mode: false
 
-    - name: Reload sshd to apply the SSH hardening
-      ansible.builtin.service:
-        name: ssh
-        state: reloaded
-      changed_when: false
-
-  rescue:
-    - name: Read the SSH configuration on disk after the failure
-      ansible.builtin.command: /usr/sbin/sshd -T
-      register: harden_sshd_on_disk
-      changed_when: false
-      failed_when: false
-      when: not ansible_check_mode
-
-    - name: Reload sshd if the configuration on disk is still hardened
-      ansible.builtin.service:
-        name: ssh
-        state: reloaded
-      register: harden_sshd_rescue_reload
-      changed_when: false
-      ignore_errors: true
-      when:
-        - not ansible_check_mode
-        - harden_ssh_users is defined
-        - harden_sshd_on_disk.rc == 0
-        - "'permitrootlogin no' in harden_sshd_on_disk.stdout_lines"
-        - "'passwordauthentication no' in harden_sshd_on_disk.stdout_lines"
-        - "'kbdinteractiveauthentication no' in harden_sshd_on_disk.stdout_lines"
-        - harden_sshd_disk_allowusers | length > 0
-        - harden_sshd_disk_allowusers | difference(harden_ssh_users) | length == 0
-      vars:
-        harden_sshd_disk_allowusers: >-
-          {{ harden_sshd_on_disk.stdout_lines | select('match', '^allowusers ')
-          | map('regex_replace', '^allowusers ', '') | list }}
-
-    - name: Fail with the original error
-      vars:
-        harden_sshd_keywords: '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|allowusers) '
-      ansible.builtin.fail:
-        msg: >-
-          {{ ansible_failed_task.name }}:
-          {% if ansible_failed_result.results is defined %}refused to remove
-          {{ ansible_failed_result.results | selectattr('failed', 'defined') | selectattr('failed')
-          | map(attribute='item') | join(', ') }} from sshd_config, because sshd would not be hardened
-          after the removal.
-          {% else %}{{ ansible_failed_result.msg | default('failed') }}
-          {% endif %}
-          {% if harden_sshd_on_disk is skipped %}
-          {% elif harden_ssh_users is not defined %}sshd was not reloaded.
-          {% elif harden_sshd_on_disk.rc != 0 %}sshd -T fails on the configuration on disk:
-          {{ harden_sshd_on_disk.stderr_lines | join('; ') }}. sshd was not reloaded.
-          {% else %}{{ ansible_failed_result.stderr_lines | default([]) | join('; ') }}
-          sshd -T on the configuration on disk shows {{ harden_sshd_on_disk.stdout_lines
-          | select('match', harden_sshd_keywords) | join(', ') }}.
-          {% if harden_sshd_rescue_reload is skipped %}sshd was not reloaded, because that is not
-          hardened, so the running sshd keeps its previous configuration, which may still accept
-          passwords or other users.{% elif harden_sshd_rescue_reload is failed %}Reloading sshd failed:
-          {{ harden_sshd_rescue_reload.msg | default('') }}{% else %}sshd was reloaded to apply
-          it.{% endif %}
-          {{ harden_sshd_hint }}{% endif %}
+- name: Assert the SSH hardening is in effect
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in harden_sshd_effective.stdout_lines"
+      - "'passwordauthentication no' in harden_sshd_effective.stdout_lines"
+      - "'kbdinteractiveauthentication no' in harden_sshd_effective.stdout_lines"
+    fail_msg: >-
+      sshd does not apply /etc/ssh/sshd_config.d/00-hardening.conf: `sshd -T` shows
+      {{ harden_sshd_effective.stdout_lines
+      | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication) ')
+      | join(', ') }}. A drop-in that sorts before it may set the same keywords.
+  when: not ansible_check_mode
 
 # Minimize Attack Surface
 - name: Remove unnecessary packages

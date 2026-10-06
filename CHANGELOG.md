@@ -10,17 +10,12 @@ patches without rereading their group_vars.
 
 ### Changed
 
-- **Breaking:** `harden` writes its SSH settings to `/etc/ssh/sshd_config.d/00-hardening.conf`
-  instead of `sshd_config` and adds `KbdInteractiveAuthentication no`. Any drop-in that set the same
-  keyword, such as cloud-init's `50-cloud-init.conf` with `PasswordAuthentication yes`, used to
-  override them silently, so hosts where that kept password logins working lose them. It removes
-  every unindented `PermitRootLogin`, `PasswordAuthentication` and `AllowUsers` line from
-  `sshd_config`, including hand-written ones, unless that would leave sshd unhardened. The role now
-  fails when `sshd -T` shows the settings are not in effect, including when another file adds to
-  `AllowUsers`. sshd is reloaded on every successful run instead of only when a file changed, so a
-  run that stopped before reloading cannot leave a later green run with the old configuration still
-  running. A run that fails while hardening SSH reloads sshd only if the configuration on disk is
-  still hardened (#15).
+- **Breaking:** `harden` sets `PermitRootLogin`, `PasswordAuthentication` and the new
+  `KbdInteractiveAuthentication` to `no` in `/etc/ssh/sshd_config.d/00-hardening.conf` instead of in
+  `sshd_config`, where any drop-in setting the same keyword, such as cloud-init's
+  `50-cloud-init.conf` with `PasswordAuthentication yes`, silently overrode them. Hosts where that
+  kept password logins working lose them. sshd is now reloaded on every run, and the role fails if
+  `sshd -T` shows the settings are not in effect (#15).
 
 ### Fixed
 
