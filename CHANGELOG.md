@@ -11,11 +11,14 @@ patches without rereading their group_vars.
 ### Changed
 
 - **Breaking:** `harden` writes its SSH settings to `/etc/ssh/sshd_config.d/00-hardening.conf`
-  instead of `sshd_config`, adds `KbdInteractiveAuthentication no`, and removes the
-  `PermitRootLogin`, `PasswordAuthentication` and `AllowUsers` lines earlier versions wrote to
-  `sshd_config`. Any drop-in that set the same keyword, such as cloud-init's `50-cloud-init.conf`
-  with `PasswordAuthentication yes`, used to override them silently. The role now fails when `sshd
-  -T` shows the settings are not in effect, including when another file adds to `AllowUsers` (#15).
+  instead of `sshd_config` and adds `KbdInteractiveAuthentication no`. Any drop-in that set the same
+  keyword, such as cloud-init's `50-cloud-init.conf` with `PasswordAuthentication yes`, used to
+  override them silently, so hosts where that kept password logins working lose them. It removes
+  every unindented `PermitRootLogin`, `PasswordAuthentication` and `AllowUsers` line from
+  `sshd_config`, including hand-written ones, unless that would leave sshd unhardened. The role now
+  fails when `sshd -T` shows the settings are not in effect, including when another file adds to
+  `AllowUsers`, and reloads sshd before failing so a rerun cannot pass with the old configuration
+  still running (#15).
 
 ### Fixed
 
