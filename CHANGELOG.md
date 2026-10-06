@@ -6,6 +6,13 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Fixed
+
+- `bootstrap` refreshes the apt cache only when it is more than an hour old, instead of on every run,
+  so a repeat run no longer reports its "Update apt cache" task as changed (#7).
+
 ## 1.0.1
 
 ### Fixed
