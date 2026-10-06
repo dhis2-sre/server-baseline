@@ -14,6 +14,7 @@ patches without rereading their group_vars.
   added to `firewall_allowed_ports` or `firewall_allowed_udp_ports` on a later run lands ahead of the
   default drop rather than after it, where it never matched (#4).
 
+
 ## 1.0.1
 
 ### Fixed
