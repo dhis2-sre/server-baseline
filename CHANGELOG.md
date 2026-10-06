@@ -10,8 +10,10 @@ patches without rereading their group_vars.
 
 ### Fixed
 
-- `bootstrap` refreshes the apt cache only when it is more than an hour old, instead of on every run,
-  so a repeat run no longer reports its "Update apt cache" task as changed (#7).
+- `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
+  added to `firewall_allowed_ports` or `firewall_allowed_udp_ports` on a later run lands ahead of the
+  default drop rather than after it, where it never matched (#4).
+
 
 ## 1.0.1
 
