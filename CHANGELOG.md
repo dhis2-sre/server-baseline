@@ -8,11 +8,12 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
-### Added
+### Changed
 
-- Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
-  connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
-  describes (#14).
+- **Breaking:** the collection targets Ubuntu 26.04 (resolute) instead of 24.04 (noble). The roles
+  needed no changes, but a connecting account that needs a sudo password has to become with
+  `sudo.ws`, because 26.04's default sudo-rs wraps the prompt Ansible waits for, as the README
+  describes (#14). CI and the release workflow run on `ubuntu-26.04` runners.
 
 ### Fixed
 
