@@ -8,16 +8,16 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - uses: actions/checkout@v5
 
-      # The ansible-lint hook pins its own environment to python3.13, so the runner has to have it.
+      # The ansible-lint hook pins its own environment to python3.14, so the runner has to have it.
       # If a future ansible-lint asks for something else, this step is where it fails and says so.
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       # yamllint and ansible-lint, the same hooks a committer runs locally. ansible-lint has to pass
       # at its production profile, which is what keeps the roles idiomatic as they change.
@@ -25,14 +25,14 @@ jobs:
 
   collection:
     name: Collection
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - run: pip install ansible-core
 

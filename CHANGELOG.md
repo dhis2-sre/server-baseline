@@ -8,6 +8,13 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
+### Changed
+
+- **Breaking:** the collection targets Ubuntu 26.04 (resolute) instead of 24.04 (noble). The roles
+  needed no changes, but a connecting account that needs a sudo password has to become with
+  `sudo.ws`, because 26.04's default sudo-rs wraps the prompt Ansible waits for, as the README
+  describes (#14). CI and the release workflow run on `ubuntu-26.04` runners.
+
 ### Fixed
 
 - `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port

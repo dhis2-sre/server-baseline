@@ -1,6 +1,6 @@
 # server-baseline
 
-`sre.server`, an Ansible collection that turns a stock Ubuntu 24.04 host into a hardened Docker host.
+`sre.server`, an Ansible collection that turns a stock Ubuntu 26.04 host into a hardened Docker host.
 
 It exists so that the projects deploying onto those hosts do not each carry their own copy of the
 same provisioning. They depend on a pinned version of this collection, apply the baseline, and are
@@ -134,10 +134,16 @@ builds the collection and attaches the tarball to a GitHub release.
 
 - `ansible-core` 2.15 or newer on the control machine, plus the `ansible.posix` collection.
   Installing this collection pulls it in; a `roles_path` checkout has to install `requirements.yml`.
-- Ubuntu 24.04 on the target.
+- Ubuntu 26.04 (resolute) on the target.
 - **Connect as a non-root account with sudo.** `harden` sets `PermitRootLogin no` and reloads sshd, so
   a playbook run as `root` succeeds and then locks itself out. Create the account before the first
   run, for example from cloud-init.
+- **Become with `sudo.ws` if that account needs a sudo password.** Ubuntu 26.04 makes
+  sudo-rs the default `sudo`, and sudo-rs wraps the prompt Ansible passes with `-p`, so Ansible never
+  recognises it and every `become` task times out waiting for the privilege escalation prompt.
+  Classic sudo is still installed as `/usr/bin/sudo.ws`. Set `ansible_become_exe: sudo.ws` for those
+  hosts in your inventory or `group_vars`. This happens before any role runs, so the collection
+  cannot work around it itself. Passwordless sudo is not affected.
 
 ## Things to know before you run this
 
@@ -174,4 +180,4 @@ pre-commit run --all-files
   `allowed_ssh_users` are the interface consumers configure, so they keep their names; variables
   registered inside the roles do carry a role prefix.
 - Nothing applies the roles to a real host in CI. `tests/run.sh` stops at a syntax check, so
-  verifying a change against a clean Ubuntu 24.04 VM is still manual.
+  verifying a change against a clean Ubuntu 26.04 VM is still manual.

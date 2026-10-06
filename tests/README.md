@@ -19,4 +19,4 @@ It deliberately checks the things linting the working tree cannot:
 - Each role still works on its own, not only as part of the baseline.
 
 What it does not do is apply anything. Verifying the roles against a real host means provisioning a
-clean Ubuntu 24.04 VM and running `playbooks/baseline.yml` at it; there is no VM in CI.
+clean Ubuntu 26.04 VM and running `playbooks/baseline.yml` at it; there is no VM in CI.

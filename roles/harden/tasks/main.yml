@@ -12,7 +12,7 @@
     regexp: '^\s*\"(APT::Periodic::Unattended-Upgrade)\".*;'
     line: '"APT::Periodic::Unattended-Upgrade" "1";'
 
-# The upgrade above can pull in a new openssh-server, whose postinst stops ssh.service. Ubuntu 24.04
+# The upgrade above can pull in a new openssh-server, whose postinst stops ssh.service. Ubuntu
 # activates sshd from ssh.socket, so nothing starts the service again until the next new connection,
 # and systemd removes the unit's RuntimeDirectory, /run/sshd, when it stops. The `sshd -t` validation
 # below needs that directory, and this play reuses its existing connection rather than opening a new
