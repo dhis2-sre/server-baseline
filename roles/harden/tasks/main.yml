@@ -31,7 +31,9 @@
 # keyword. Cloud images ship one: 50-cloud-init.conf sets PasswordAuthentication yes whenever the
 # provider enabled password logins. These settings therefore go in a drop-in that sorts ahead of the
 # ones Ubuntu and cloud-init ship. AllowUsers stays in sshd_config, because it adds up across every
-# file rather than taking the first value, so where it is written does not change what it allows.
+# file rather than taking the first value, so drop-in order does not change what it allows. It is
+# appended to the end of the file, though, which puts it inside a Match block if the file ends with
+# one, so the check below also confirms it applies globally.
 - name: Write the SSH hardening drop-in
   ansible.builtin.template:
     src: sshd-hardening.conf.j2
@@ -64,7 +66,7 @@
   ansible.builtin.command: /usr/sbin/sshd -T
   register: harden_sshd_effective
   changed_when: false
-  check_mode: false
+  when: not ansible_check_mode
 
 - name: Assert the SSH hardening is in effect
   ansible.builtin.assert:
@@ -72,11 +74,18 @@
       - "'permitrootlogin no' in harden_sshd_effective.stdout_lines"
       - "'passwordauthentication no' in harden_sshd_effective.stdout_lines"
       - "'kbdinteractiveauthentication no' in harden_sshd_effective.stdout_lines"
+      - (allowed_ssh_users + [docker_user]) | unique | difference(harden_sshd_allowusers) | length == 0
     fail_msg: >-
-      sshd does not apply /etc/ssh/sshd_config.d/00-hardening.conf: `sshd -T` shows
+      sshd's effective configuration is not hardened: `sshd -T` shows
       {{ harden_sshd_effective.stdout_lines
-      | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication) ')
-      | join(', ') }}. A drop-in that sorts before it may set the same keywords.
+      | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|allowusers) ')
+      | join(', ') }}. A drop-in sorting before 00-hardening.conf or a `Match all` block may override
+      the first three, and AllowUsers is missing when it ended up inside a Match block at the end of
+      sshd_config.
+  vars:
+    harden_sshd_allowusers: >-
+      {{ harden_sshd_effective.stdout_lines | select('match', '^allowusers ')
+      | map('regex_replace', '^allowusers ', '') | list }}
   when: not ansible_check_mode
 
 # Minimize Attack Surface
