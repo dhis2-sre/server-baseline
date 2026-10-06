@@ -93,11 +93,15 @@
   ansible.builtin.apt:
     name: fail2ban
     state: present
+  notify: Restart fail2ban
 
-- name: Restart fail2ban
+# Started rather than restarted, so a run with nothing to change leaves fail2ban watching the logs.
+# A change that needs a restart notifies the handler instead.
+- name: Ensure fail2ban is enabled and running
   ansible.builtin.service:
     name: fail2ban
-    state: restarted
+    state: started
+    enabled: true
 
 - name: Set kernel parameters for hardening
   ansible.posix.sysctl:

@@ -6,6 +6,13 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Fixed
+
+- `harden` no longer restarts fail2ban on every run. It ensures the service is enabled and running,
+  and restarts it through a handler only when installing it changed something (#8).
+
 ## 1.0.1
 
 ### Fixed
