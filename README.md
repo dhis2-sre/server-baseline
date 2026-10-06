@@ -155,6 +155,13 @@ builds the collection and attaches the tarball to a GitHub release.
 - **The SSH tasks validate with `sshd -t`**, which needs `/run/sshd` to exist. Every booted host has
   it, but a container or a chroot where sshd has never started does not, and the play fails there
   rather than writing a config it could not check.
+- **SSH settings live in `/etc/ssh/sshd_config.d/00-hardening.conf`**, which sorts ahead of other
+  drop-ins such as cloud-init's `50-cloud-init.conf`. `harden` then checks `sshd -T` and fails if
+  `PermitRootLogin`, `PasswordAuthentication` or `KbdInteractiveAuthentication` is not `no`, or if
+  the effective `AllowUsers` differs from `allowed_ssh_users` plus `docker_user`. `AllowUsers` adds
+  up across every file, so allow an extra user through `allowed_ssh_users`, not a drop-in of your
+  own. A `Match` block in another drop-in can still re-enable passwords for the connections it
+  matches; the check reads the global settings only.
 
 ## Development
 
