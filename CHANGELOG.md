@@ -8,6 +8,15 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
+### Changed
+
+- **Breaking:** `harden` sets `PermitRootLogin`, `PasswordAuthentication` and the new
+  `KbdInteractiveAuthentication` to `no` in `/etc/ssh/sshd_config.d/00-hardening.conf` instead of in
+  `sshd_config`, where any drop-in setting the same keyword, such as cloud-init's
+  `50-cloud-init.conf` with `PasswordAuthentication yes`, silently overrode them. Hosts where that
+  kept password logins working lose them. sshd is now reloaded on every run, and the role fails if
+  `sshd -T` shows the settings are not in effect (#15).
+
 ### Fixed
 
 - `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
