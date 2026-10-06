@@ -40,8 +40,11 @@
 # pass against the files on disk while sshd kept running the old configuration. A reload re-reads
 # the configuration without dropping connections, including the one running this play.
 #
-# When the block fails, the rescue reloads only if the configuration on disk is still hardened, so a
-# failed run applies what it wrote without also activating a weaker drop-in that was waiting on disk.
+# When the block fails, the rescue reloads only if the configuration on disk is still hardened: the
+# three settings are no and AllowUsers names only configured users. The play cannot read what the
+# running sshd has loaded, so it cannot tell a weaker drop-in waiting on disk from one already in
+# effect, and it errs towards never activating extra users; the run fails either way. `sshd -T` shows
+# global settings only, so a Match block in a waiting drop-in is not caught.
 - name: Harden SSH
   vars:
     harden_ssh_users: "{{ (allowed_ssh_users + [docker_user]) | unique }}"
@@ -127,6 +130,7 @@
       ignore_errors: true
       when:
         - not ansible_check_mode
+        - harden_ssh_users is defined
         - harden_sshd_on_disk.rc == 0
         - "'permitrootlogin no' in harden_sshd_on_disk.stdout_lines"
         - "'passwordauthentication no' in harden_sshd_on_disk.stdout_lines"
@@ -151,16 +155,18 @@
           {% else %}{{ ansible_failed_result.msg | default('failed') }}
           {% endif %}
           {% if harden_sshd_on_disk is skipped %}
+          {% elif harden_ssh_users is not defined %}sshd was not reloaded.
           {% elif harden_sshd_on_disk.rc != 0 %}sshd -T fails on the configuration on disk:
           {{ harden_sshd_on_disk.stderr_lines | join('; ') }}. sshd was not reloaded.
           {% else %}{{ ansible_failed_result.stderr_lines | default([]) | join('; ') }}
           sshd -T on the configuration on disk shows {{ harden_sshd_on_disk.stdout_lines
           | select('match', harden_sshd_keywords) | join(', ') }}.
           {% if harden_sshd_rescue_reload is skipped %}sshd was not reloaded, because that is not
-          hardened.{% elif harden_sshd_rescue_reload is failed %}Reloading sshd failed:
+          hardened, so the running sshd keeps its previous configuration, which may still accept
+          passwords or other users.{% elif harden_sshd_rescue_reload is failed %}Reloading sshd failed:
           {{ harden_sshd_rescue_reload.msg | default('') }}{% else %}sshd was reloaded to apply
-          it.{% endif %}{% endif %}
-          {{ harden_sshd_hint }}
+          it.{% endif %}
+          {{ harden_sshd_hint }}{% endif %}
 
 # Minimize Attack Surface
 - name: Remove unnecessary packages
