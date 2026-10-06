@@ -17,9 +17,10 @@ patches without rereading their group_vars.
   every unindented `PermitRootLogin`, `PasswordAuthentication` and `AllowUsers` line from
   `sshd_config`, including hand-written ones, unless that would leave sshd unhardened. The role now
   fails when `sshd -T` shows the settings are not in effect, including when another file adds to
-  `AllowUsers`. sshd is reloaded on every run, including one that fails, instead of only when a
-  file changed, so a run that stopped before reloading cannot leave a later green run with the old
-  configuration still running (#15).
+  `AllowUsers`. sshd is reloaded on every successful run instead of only when a file changed, so a
+  run that stopped before reloading cannot leave a later green run with the old configuration still
+  running. A run that fails while hardening SSH reloads sshd only if the configuration on disk is
+  still hardened (#15).
 
 ### Fixed
 

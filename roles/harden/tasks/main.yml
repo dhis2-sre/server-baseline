@@ -17,7 +17,7 @@
 # and systemd removes the unit's RuntimeDirectory, /run/sshd, when it stops. The `sshd -t` validation
 # below needs that directory, and this play reuses its existing connection rather than opening a new
 # one, so on any host with an openssh update pending the SSH tasks would fail with "Missing privilege
-# separation directory". Starting the service recreates the directory and gives the reload handler a
+# separation directory". Starting the service recreates the directory and gives the reload below a
 # live unit to reload.
 - name: Ensure sshd is running before validating its configuration
   ansible.builtin.service:
@@ -34,12 +34,14 @@
 # with every drop-in, confirms they are in effect. That check is skipped under --check, where nothing
 # was written.
 #
-# sshd is reloaded on every run, after the check and in the rescue, rather than by a handler. A run
-# that stops after writing the files, whether a task fails, the connection drops or the operator
+# sshd is reloaded on every run once the check has passed, rather than by a handler. A run that
+# stops after writing the files, whether a task fails, the connection drops or the operator
 # interrupts it, would lose a handler's notification, and the rerun would find nothing changed and
 # pass against the files on disk while sshd kept running the old configuration. A reload re-reads
-# the configuration without dropping connections, including the one running this play, and what was
-# written up to any failure only adds hardening, so reloading then is safe too.
+# the configuration without dropping connections, including the one running this play.
+#
+# When the block fails, the rescue reloads only if the configuration on disk is still hardened, so a
+# failed run applies what it wrote without also activating a weaker drop-in that was waiting on disk.
 - name: Harden SSH
   vars:
     harden_ssh_users: "{{ (allowed_ssh_users + [docker_user]) | unique }}"
@@ -93,11 +95,9 @@
           - "'kbdinteractiveauthentication no' in harden_sshd_effective.stdout_lines"
           - harden_sshd_allowusers | sort == harden_ssh_users | sort
         fail_msg: >-
-          sshd -T shows {{ harden_sshd_effective.stdout_lines
-          | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication) ')
-          | join(', ') }} and allowusers {{ harden_sshd_allowusers | join(' ') | default('(none)', true) }},
-          where 00-hardening.conf sets no, no, no and {{ harden_ssh_users | join(' ') }}.
-          {{ harden_sshd_hint }}
+          sshd's effective configuration does not match 00-hardening.conf, which sets
+          PermitRootLogin, PasswordAuthentication and KbdInteractiveAuthentication to no and AllowUsers
+          to {{ harden_ssh_users | join(' ') }}.
       vars:
         harden_sshd_allowusers: >-
           {{ harden_sshd_effective.stdout_lines | select('match', '^allowusers ')
@@ -111,23 +111,56 @@
       changed_when: false
 
   rescue:
-    - name: Reload sshd to apply the SSH changes made before the failure
+    - name: Read the SSH configuration on disk after the failure
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: harden_sshd_on_disk
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+
+    - name: Reload sshd if the configuration on disk is still hardened
       ansible.builtin.service:
         name: ssh
         state: reloaded
+      register: harden_sshd_rescue_reload
       changed_when: false
-      when: not ansible_check_mode
+      ignore_errors: true
+      when:
+        - not ansible_check_mode
+        - harden_sshd_on_disk.rc == 0
+        - "'permitrootlogin no' in harden_sshd_on_disk.stdout_lines"
+        - "'passwordauthentication no' in harden_sshd_on_disk.stdout_lines"
+        - "'kbdinteractiveauthentication no' in harden_sshd_on_disk.stdout_lines"
+        - harden_sshd_disk_allowusers | length > 0
+        - harden_sshd_disk_allowusers | difference(harden_ssh_users) | length == 0
+      vars:
+        harden_sshd_disk_allowusers: >-
+          {{ harden_sshd_on_disk.stdout_lines | select('match', '^allowusers ')
+          | map('regex_replace', '^allowusers ', '') | list }}
 
     - name: Fail with the original error
+      vars:
+        harden_sshd_keywords: '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|allowusers) '
       ansible.builtin.fail:
         msg: >-
           {{ ansible_failed_task.name }}:
           {% if ansible_failed_result.results is defined %}refused to remove
           {{ ansible_failed_result.results | selectattr('failed', 'defined') | selectattr('failed')
-          | map(attribute='item') | join(', ') }} from sshd_config, because without
-          {{ 'it' if (ansible_failed_result.results | selectattr('failed', 'defined')
-          | selectattr('failed') | list | length) == 1 else 'them' }} sshd would not be hardened.
-          {{ harden_sshd_hint }}{% else %}{{ ansible_failed_result.msg | default('failed') }}{% endif %}
+          | map(attribute='item') | join(', ') }} from sshd_config, because sshd would not be hardened
+          after the removal.
+          {% else %}{{ ansible_failed_result.msg | default('failed') }}
+          {% endif %}
+          {% if harden_sshd_on_disk is skipped %}
+          {% elif harden_sshd_on_disk.rc != 0 %}sshd -T fails on the configuration on disk:
+          {{ harden_sshd_on_disk.stderr_lines | join('; ') }}. sshd was not reloaded.
+          {% else %}{{ ansible_failed_result.stderr_lines | default([]) | join('; ') }}
+          sshd -T on the configuration on disk shows {{ harden_sshd_on_disk.stdout_lines
+          | select('match', harden_sshd_keywords) | join(', ') }}.
+          {% if harden_sshd_rescue_reload is skipped %}sshd was not reloaded, because that is not
+          hardened.{% elif harden_sshd_rescue_reload is failed %}Reloading sshd failed:
+          {{ harden_sshd_rescue_reload.msg | default('') }}{% else %}sshd was reloaded to apply
+          it.{% endif %}{% endif %}
+          {{ harden_sshd_hint }}
 
 # Minimize Attack Surface
 - name: Remove unnecessary packages
