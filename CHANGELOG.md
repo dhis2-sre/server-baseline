@@ -10,6 +10,14 @@ patches without rereading their group_vars.
 
 ### Fixed
 
+- `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
+  added to `firewall_allowed_ports` or `firewall_allowed_udp_ports` on a later run lands ahead of the
+  default drop rather than after it, where it never matched (#4).
+- `bootstrap` refreshes the apt cache only when it is more than an hour old, instead of on every run,
+  so a repeat run no longer reports its "Update apt cache" task as changed (#7).
+- `harden` replaces an existing `/etc/subuid` or `/etc/subgid` entry for `docker_user` instead of
+  adding a second one beside it. `useradd` writes an entry for each new user, and wherever its range
+  was not `100000:65536` the role left the user with two ranges (#5).
 - `harden` merges its Docker daemon settings (`userns-remap`, `icc`, `log-driver`, `log-opts`) into
   `/etc/docker/daemon.json` instead of replacing the file, so settings it does not manage, such as
   `data-root` or `registry-mirrors`, survive a run (#6). The hardening keys still win. Existing
