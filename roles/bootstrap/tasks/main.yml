@@ -1,6 +1,9 @@
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
+    # Refresh only when the cache is over an hour old, so a repeat run reports ok instead of changed.
+    # The Docker install below still refreshes unconditionally, to pick up the repository it adds.
+    cache_valid_time: 3600
 
 - name: Install required packages
   ansible.builtin.apt:
