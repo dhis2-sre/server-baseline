@@ -24,6 +24,8 @@ patches without rereading their group_vars.
   `log-opts` are kept when the driver was already `json-file`, and dropped otherwise, because
   dockerd will not start with options `json-file` does not know. A file that is not a JSON object
   now stops the role instead of being overwritten.
+- `harden` no longer restarts fail2ban on every run. It ensures the service is enabled and running,
+  and restarts it through a handler only when installing it changed something (#8).
 
 ### Changed
 
