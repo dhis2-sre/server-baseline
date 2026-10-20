@@ -1,0 +1,63 @@
+# Docker daemon hardening, merged into /etc/docker/daemon.json rather than replacing it. The file is
+# shared with whatever else configures the daemon (a data-root on a larger disk, registry mirrors,
+# address pools), so only the keys below are enforced and every other key is left as it was.
+#
+# In a task file of its own so tests/docker-daemon.yml can run it against a scratch file.
+
+- name: Check for an existing Docker daemon config
+  ansible.builtin.stat:
+    path: "{{ harden_docker_daemon_config }}"
+  register: harden_docker_daemon_stat
+
+- name: Read the existing Docker daemon config
+  ansible.builtin.slurp:
+    src: "{{ harden_docker_daemon_config }}"
+  register: harden_docker_daemon_raw
+  when: harden_docker_daemon_stat.stat.exists
+
+# A file that does not parse stops the role. Writing over it would discard whatever it was meant to
+# say, which is the loss this task file exists to prevent.
+- name: Parse the existing Docker daemon config
+  block:
+    - name: Parse the existing Docker daemon config
+      ansible.builtin.set_fact:
+        # An empty file is treated as an empty object.
+        harden_docker_daemon_existing: >-
+          {{ (harden_docker_daemon_raw.content | b64decode | trim or '{}') | from_json
+             if harden_docker_daemon_stat.stat.exists else {} }}
+
+    - name: Assert the existing Docker daemon config is a JSON object
+      ansible.builtin.assert:
+        that: harden_docker_daemon_existing is mapping
+        quiet: true
+  rescue:
+    - name: Stop on a Docker daemon config that is not a JSON object
+      ansible.builtin.fail:
+        msg: >-
+          {{ harden_docker_daemon_config }} exists but is not a JSON object, so its settings cannot
+          be merged with the hardening ones. Fix or remove it and run the role again.
+
+- name: Configure Docker daemon for security
+  ansible.builtin.copy:
+    dest: "{{ harden_docker_daemon_config }}"
+    # Merged recursively and with the hardening keys last, so they win and anything else nested
+    # under them, such as an extra log option, is kept.
+    content: "{{ harden_docker_daemon_base | combine(harden_docker_daemon_hardening, recursive=true) | to_nice_json }}\n"
+    mode: '0644'
+  vars:
+    harden_docker_daemon_hardening:
+      userns-remap: "{{ docker_user }}"
+      icc: false
+      log-driver: json-file
+      log-opts:
+        max-size: 10m
+        max-file: "3"
+    # log-opts belong to the driver they were written for. When the existing driver is not
+    # json-file, its options are dropped rather than merged, because dockerd refuses to start with
+    # an option json-file does not know. json-file is also what an unset log-driver means.
+    harden_docker_daemon_base: >-
+      {{ harden_docker_daemon_existing
+         if harden_docker_daemon_existing.get('log-driver', 'json-file') == 'json-file'
+         else harden_docker_daemon_existing | dict2items | rejectattr('key', 'eq', 'log-opts') | items2dict }}
+  register: harden_docker_daemon_result
+  notify: Restart docker

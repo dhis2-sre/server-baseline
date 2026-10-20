@@ -94,11 +94,15 @@
   ansible.builtin.apt:
     name: fail2ban
     state: present
+  notify: Restart fail2ban
 
-- name: Restart fail2ban
+# Started rather than restarted, so a run with nothing to change leaves fail2ban watching the logs.
+# A change that needs a restart notifies the handler instead.
+- name: Ensure fail2ban is enabled and running
   ansible.builtin.service:
     name: fail2ban
-    state: restarted
+    state: started
+    enabled: true
 
 - name: Set kernel parameters for hardening
   ansible.posix.sysctl:
@@ -141,6 +145,9 @@
   # Allocates UID range 100000-165535 for the user, enabling Docker to remap container UIDs
   ansible.builtin.lineinfile:
     path: /etc/subuid
+    # Matches any existing entry for the user, so one with a different range is replaced rather
+    # than left alongside a second entry.
+    regexp: "^{{ docker_user | regex_escape }}:"
     line: "{{ docker_user }}:100000:65536"
     create: true
     mode: '0644'
@@ -149,6 +156,9 @@
   # Allocates GID range 100000-165535 for the user, enabling Docker to remap container GIDs
   ansible.builtin.lineinfile:
     path: /etc/subgid
+    # Matches any existing entry for the user, so one with a different range is replaced rather
+    # than left alongside a second entry.
+    regexp: "^{{ docker_user | regex_escape }}:"
     line: "{{ docker_user }}:100000:65536"
     create: true
     mode: '0644'
@@ -177,20 +187,7 @@
     fail_msg: "Docker AppArmor profile is not loaded. Ensure AppArmor is configured for Docker security."
 
 - name: Configure Docker daemon for security
-  ansible.builtin.copy:
-    dest: /etc/docker/daemon.json
-    content: |
-      {
-        "userns-remap": "{{ docker_user }}",
-        "icc": false,
-        "log-driver": "json-file",
-        "log-opts": {
-          "max-size": "10m",
-          "max-file": "3"
-        }
-      }
-    mode: '0644'
-  notify: Restart docker
+  ansible.builtin.include_tasks: docker_daemon.yml
 
 - name: Restrict Docker socket permissions
   ansible.builtin.file:
