@@ -18,7 +18,8 @@
 # below needs that directory, and this play reuses its existing connection rather than opening a new
 # one, so on any host with an openssh update pending the SSH tasks would fail with "Missing privilege
 # separation directory". Starting the service recreates the directory and gives the reload handler a
-# live unit to reload.
+# live unit to reload. On 26.04 ssh.service runs alongside the socket, so there this task only does
+# something if the upgrade just stopped it.
 - name: Ensure sshd is running before validating its configuration
   ansible.builtin.service:
     name: ssh

@@ -34,6 +34,9 @@ patches without rereading their group_vars.
 
 ### Added
 
+- Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
+  connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
+  describes (#14).
 - `harden_docker_daemon_config`, the path the Docker daemon settings are merged into. It defaults
   to `/etc/docker/daemon.json` and exists for the tests.
 - `tests/docker-daemon.yml`, run by `tests/run.sh`, which applies those tasks to a scratch file and

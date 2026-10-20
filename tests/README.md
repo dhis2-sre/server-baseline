@@ -26,4 +26,6 @@ the role and is left alone. It needs no root, never touches `/etc/docker/daemon.
 play before the `Restart docker` handler it triggers can run.
 
 Nothing else is applied. Verifying the roles against a real host means provisioning a clean Ubuntu
-24.04 VM and running `playbooks/baseline.yml` at it; there is no VM in CI.
+24.04 or 26.04 VM and running `playbooks/baseline.yml` at it; there is no VM in CI. CI runs the
+suite on both `ubuntu-24.04` and `ubuntu-26.04` runners, but those are the control machine, not a
+target.
