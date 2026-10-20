@@ -1,0 +1,24 @@
+# One case of tests/docker-daemon.yml: a config that is not a JSON object stops the role, and the
+# file is left exactly as it was.
+- name: Seed a config that is not a JSON object
+  ansible.builtin.copy:
+    dest: "{{ harden_docker_daemon_config }}"
+    content: "{{ docker_daemon_bad_content }}"
+    mode: '0644'
+
+- name: Apply the daemon.json tasks
+  block:
+    - name: Apply the daemon.json tasks
+      ansible.builtin.include_role:
+        name: sre.server.harden
+        tasks_from: docker_daemon
+
+    - name: The role went on past a config it cannot merge
+      ansible.builtin.fail:
+        msg: "The daemon.json tasks accepted {{ docker_daemon_bad_content }}"
+  rescue:
+    - name: The role stopped for that reason and left the file alone
+      ansible.builtin.assert:
+        that:
+          - ansible_failed_result.msg is search('is not a JSON object')
+          - lookup('ansible.builtin.file', harden_docker_daemon_config) == docker_daemon_bad_content
