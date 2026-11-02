@@ -24,7 +24,7 @@ namespace, and the same applies.
 | Role | What it does |
 |---|---|
 | `sre.server.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, plus a drop of TCP packets that carry IPv4 header options, persisted with `netfilter-persistent` |
 | `sre.server.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
 | `sre.server.baseline` | All three of the above, in that order. No tasks of its own |
 
