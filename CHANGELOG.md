@@ -34,6 +34,10 @@ patches without rereading their group_vars.
 
 ### Added
 
+- `firewall` drops IPv4 TCP packets that carry IP header options, in the raw `PREROUTING` chain
+  ahead of Docker's DNAT so it covers published container ports and the host's own listeners. No
+  legitimate client sends them, and they trigger CVE-2026-98432, a remote use-after-free in the
+  IPv4 TCP handshake with no fixed Ubuntu 24.04 kernel yet.
 - `harden_docker_daemon_config`, the path the Docker daemon settings are merged into. It defaults
   to `/etc/docker/daemon.json` and exists for the tests.
 - `tests/docker-daemon.yml`, run by `tests/run.sh`, which applies those tasks to a scratch file and
