@@ -2,3 +2,6 @@
 PermitRootLogin no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
+{% for port in harden_ssh_ports %}
+Port {{ port }}
+{% endfor %}

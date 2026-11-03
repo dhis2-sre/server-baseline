@@ -1,52 +1,9 @@
-# sshd listens on ssh_port. The port this play is connected on stays open alongside it, so the move
-# takes two runs and never strands the play: the second, with ansible_port set to ssh_port, closes 22.
+# Moves the sshd listener onto harden_ssh_ports, which main.yml has already written into the
+# hardening drop-in and checked with `sshd -T`.
 #
 # Ubuntu 24.04 starts sshd from ssh.socket, whose ports sshd-socket-generator takes from the Port
 # lines on a daemon-reload, so only restarting the socket moves them. That restarts ssh.service too,
 # but KillMode=process keeps open sessions, this play's included.
-
-# "client_ip client_port server_ip server_port". Read without become, which drops it, and empty for a
-# local connection.
-- name: Read the port this play is connected on
-  ansible.builtin.command: printenv SSH_CONNECTION
-  become: false
-  register: harden_ssh_connection
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
-- name: Work out the ports sshd listens on
-  ansible.builtin.set_fact:
-    harden_ssh_ports: "{{ ([ssh_port] + harden_ssh_connection.stdout.split()[3:4]) | map('int') | unique | sort }}"
-
-- name: Write the SSH port drop-in
-  ansible.builtin.template:
-    src: sshd-port.conf.j2
-    dest: /etc/ssh/sshd_config.d/10-port.conf
-    owner: root
-    group: root
-    mode: '0644'
-    validate: /usr/sbin/sshd -t -f %s
-
-# Port adds up across files, so a Port line elsewhere keeps its port open too.
-- name: Read the ports in sshd's effective configuration
-  ansible.builtin.command: /usr/sbin/sshd -T
-  register: harden_sshd_effective
-  changed_when: false
-  check_mode: false
-
-- name: Assert sshd is configured for exactly the SSH ports
-  ansible.builtin.assert:
-    that: harden_sshd_ports == harden_ssh_ports
-    fail_msg: >-
-      sshd is configured for ports {{ harden_sshd_ports | join(', ') }}, not
-      {{ harden_ssh_ports | join(', ') }}. Remove the other Port lines from sshd_config and sshd_config.d.
-  # --check does not write the drop-in.
-  when: not ansible_check_mode
-  vars:
-    harden_sshd_ports: >-
-      {{ harden_sshd_effective.stdout_lines | select('match', '^port ')
-      | map('regex_replace', '^port ', '') | map('int') | unique | sort }}
 
 # Compared with what sshd listens on rather than notified, so a run that stopped before applying the
 # drop-in is caught up by the next one.
