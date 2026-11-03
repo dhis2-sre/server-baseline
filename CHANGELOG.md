@@ -39,6 +39,8 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
   chain let routed traffic through to ports 22, 80 and 443 only because it matched those ports
   after address translation, so a WireGuard VPN forwarding its clients stops working on upgrade.
 - Dropped container traffic is logged, rate limited, with the prefix `[DOCKER-USER BLOCK]`.
+- ufw no longer applies `/etc/ufw/sysctl.conf` (`IPT_SYSCTL=` in `/etc/default/ufw`), which on every
+  start and reload set `log_martians` back to 0 over `harden`'s kernel parameters.
 - The role no longer prints the rules at the end of a run. Use `ufw status` and
   `iptables --list DOCKER-USER`.
 - Entries in the port lists that are not ports or ranges are rejected up front.

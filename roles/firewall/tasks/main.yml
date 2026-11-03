@@ -65,6 +65,14 @@
         mode: '0750'
       notify: Reload ufw
 
+    # ufw applies /etc/ufw/sysctl.conf on every start and reload, boot included, and that file sets
+    # log_martians to 0, undoing harden's kernel parameters. An empty IPT_SYSCTL skips it.
+    - name: Leave kernel parameters to harden
+      ansible.builtin.lineinfile:
+        path: /etc/default/ufw
+        regexp: '^IPT_SYSCTL='
+        line: IPT_SYSCTL=
+
     - name: Set ufw default policies
       community.general.ufw:
         direction: "{{ item.direction }}"
