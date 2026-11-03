@@ -6,7 +6,7 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
-## Unreleased
+## 1.1.0
 
 ### Changed
 
@@ -22,7 +22,35 @@ patches without rereading their group_vars.
 - `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
   added to `firewall_allowed_ports` or `firewall_allowed_udp_ports` on a later run lands ahead of the
   default drop rather than after it, where it never matched (#4).
+- `bootstrap` refreshes the apt cache only when it is more than an hour old, instead of on every run,
+  so a repeat run no longer reports its "Update apt cache" task as changed (#7).
+- `harden` replaces an existing `/etc/subuid` or `/etc/subgid` entry for `docker_user` instead of
+  adding a second one beside it. `useradd` writes an entry for each new user, and wherever its range
+  was not `100000:65536` the role left the user with two ranges (#5).
+- `harden` merges its Docker daemon settings (`userns-remap`, `icc`, `log-driver`, `log-opts`) into
+  `/etc/docker/daemon.json` instead of replacing the file, so settings it does not manage, such as
+  `data-root` or `registry-mirrors`, survive a run (#6). The hardening keys still win. Existing
+  `log-opts` are kept when the driver was already `json-file`, and dropped otherwise, because
+  dockerd will not start with options `json-file` does not know. A file that is not a JSON object
+  now stops the role instead of being overwritten.
+- `harden` no longer restarts fail2ban on every run. It ensures the service is enabled and running,
+  and restarts it through a handler only when installing it changed something (#8).
 
+### Changed
+
+- The first run after upgrading rewrites `daemon.json` with sorted keys, so Docker restarts once on
+  each host even where the settings are unchanged.
+
+### Added
+
+- `firewall` drops IPv4 TCP packets that carry IP header options, in the raw `PREROUTING` chain
+  ahead of Docker's DNAT so it covers published container ports and the host's own listeners. No
+  legitimate client sends them, and they trigger CVE-2026-98432, a remote use-after-free in the
+  IPv4 TCP handshake with no fixed Ubuntu 24.04 kernel yet.
+- `harden_docker_daemon_config`, the path the Docker daemon settings are merged into. It defaults
+  to `/etc/docker/daemon.json` and exists for the tests.
+- `tests/docker-daemon.yml`, run by `tests/run.sh`, which applies those tasks to a scratch file and
+  checks the result. It is the suite's first test that applies anything.
 
 ## 1.0.1
 

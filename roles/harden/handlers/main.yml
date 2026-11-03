@@ -2,3 +2,15 @@
   ansible.builtin.service:
     name: docker
     state: restarted
+
+# Reload, not restart: sshd re-reads its configuration without dropping the connection this play is
+# running over. New connections get the hardened settings immediately.
+- name: Reload sshd
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted

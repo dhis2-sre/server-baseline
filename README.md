@@ -24,7 +24,7 @@ namespace, and the same applies.
 | Role | What it does |
 |---|---|
 | `sre.server.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, plus a drop of TCP packets that carry IPv4 header options, persisted with `netfilter-persistent` |
 | `sre.server.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
 | `sre.server.baseline` | All three of the above, in that order. No tasks of its own |
 
@@ -164,9 +164,9 @@ builds the collection and attaches the tarball to a GitHub release.
 
 ## Development
 
-`tests/run.sh` builds the collection, installs it into a temporary directory, and syntax-checks the
-playbooks against the installed copy. See [tests/README.md](tests/README.md) for what that does and
-does not prove. Lint with the same hooks CI runs:
+`tests/run.sh` builds the collection, installs it into a temporary directory, syntax-checks the
+playbooks against the installed copy, and runs the one behaviour test there is, for how `harden`
+writes `daemon.json`. See [tests/README.md](tests/README.md) for what that does and does not prove. Lint with the same hooks CI runs:
 
 ```bash
 pre-commit run --all-files
@@ -179,5 +179,5 @@ pre-commit run --all-files
 - `var-naming[no-role-prefix]` is skipped in `.ansible-lint`. `docker_user`, `deploy_dir` and
   `allowed_ssh_users` are the interface consumers configure, so they keep their names; variables
   registered inside the roles do carry a role prefix.
-- Nothing applies the roles to a real host in CI. `tests/run.sh` stops at a syntax check, so
-  verifying a change against a clean Ubuntu 24.04 VM is still manual.
+- Nothing applies the roles to a real host in CI. Apart from the `daemon.json` test, `tests/run.sh`
+  stops at a syntax check, so verifying a change against a clean Ubuntu 24.04 VM is still manual.
