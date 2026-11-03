@@ -27,7 +27,9 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
   unreachable, from containers on the same host as well.** The play refuses to run if the port it
   connects over is not listed.
 - `firewall` purges `iptables-persistent` and `netfilter-persistent`, which Ubuntu's ufw package
-  cannot be installed alongside. ufw restores the rules on boot instead, `DOCKER-USER` included.
+  cannot be installed alongside. ufw restores the rules on boot instead, `DOCKER-USER` included, and
+  the drop of TCP packets that carry IPv4 header options moves to `/etc/ufw/before.init`, which ufw
+  runs on boot and on every reload. The role owns that file and replaces it.
 - `DOCKER-USER` lets container traffic out by bridge interface (`firewall_docker_bridges`) instead
   of allowing the `172.16.0.0/12` source range, which also let in any client in that range. Listed
   ports RETURN to Docker's own rules instead of being accepted, so only published ports are reachable.

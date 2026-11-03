@@ -36,8 +36,10 @@ around both.
 `firewall` filters two paths. Services on the host are reached through the `INPUT` chain, which ufw
 manages. Published container ports bypass `INPUT`, because Docker rewrites their destination and
 forwards them, so the role also writes a `DOCKER-USER` chain into ufw's `after.rules`, which ufw
-restores on boot and on every reload. Do not add another firewall frontend or `iptables-persistent`,
-which Ubuntu's ufw package cannot be installed alongside.
+restores on boot and on every reload. The drop of TCP packets that carry IPv4 header options sits in
+the raw table, ahead of Docker's address translation, and is applied by `/etc/ufw/before.init`,
+which the role owns. Do not add another firewall frontend or `iptables-persistent`, which Ubuntu's
+ufw package cannot be installed alongside.
 
 ## Consuming it
 

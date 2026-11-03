@@ -62,6 +62,17 @@
         - after6.rules
       notify: Reload ufw
 
+    # Saved with netfilter-persistent before ufw replaced it. ufw only runs before.init when it is
+    # executable, which the copy Ubuntu ships is not.
+    - name: Keep the IP options drop rule in ufw's before.init
+      ansible.builtin.template:
+        src: ufw-before.init.j2
+        dest: /etc/ufw/before.init
+        owner: root
+        group: root
+        mode: '0750'
+      notify: Reload ufw
+
     - name: Set ufw default policies
       community.general.ufw:
         direction: "{{ item.direction }}"
