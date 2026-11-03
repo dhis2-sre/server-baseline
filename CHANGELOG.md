@@ -6,6 +6,14 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## Unreleased
+
+### Added
+
+- Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
+  connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
+  describes (#14).
+
 ## 1.1.0
 
 ### Changed
