@@ -118,8 +118,8 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `deploy_dir` | `/opt/deploy` | bootstrap | Directory owned by `docker_user`. Point it wherever your project expects its checkout |
 | `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its compose stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |
-| `ssh_port` | `822` | harden | Port sshd listens on. Keep it below 1024, so only root can bind it |
-| `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | TCP ports reachable from outside, both for services on the host and for published container ports. Must include the port Ansible connects on |
+| `ssh_port` | `822` | harden, firewall | Port sshd listens on, and `firewall` opens it on its own. Keep it below 1024, so only root can bind it |
+| `firewall_allowed_ports` | `[ 80, 443 ]` | firewall | TCP ports reachable from outside, both for services on the host and for published container ports. Leave SSH out: `firewall` opens `ssh_port`, and the port the play is connected on, by itself |
 | `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | UDP ports, opened the same way. 51820 is WireGuard |
 | `firewall_docker_bridges` | `[ docker0, br-+ ]` | firewall | Bridges containers sit on. Traffic leaving them is allowed, so containers reach the internet and each other. Add any network named with `com.docker.network.bridge.name`, or its containers can reach only listed ports |
 

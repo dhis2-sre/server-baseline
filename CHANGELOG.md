@@ -19,13 +19,15 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
 ### Changed
 
 - **Breaking:** `harden` moves sshd to the new `ssh_port`, 822 by default (#23). The port the play
-  connected on stays open too, so set `ansible_port` to `ssh_port`, open it in any provider firewall
-  and run again to close the old one. fail2ban's `sshd` jail bans on the same ports.
+  connected on stays open too, in sshd and in `firewall`, so set `ansible_port` to `ssh_port`, open
+  it in any provider firewall and run again to close the old one. fail2ban's `sshd` jail bans on the
+  same ports.
 - `firewall` filters services running on the host, not only published container ports (#17). It
   manages ufw, denying incoming and routed traffic and opening only `firewall_allowed_ports` and
   `firewall_allowed_udp_ports`. **After upgrading, a host service on an unlisted port becomes
-  unreachable, from containers on the same host as well.** The play refuses to run if the port it
-  connects over is not listed.
+  unreachable, from containers on the same host as well.** It opens `ssh_port` and the port the play
+  is connected on by itself, so `firewall_allowed_ports` defaults to `[ 80, 443 ]` and a list that
+  still has 22 in it keeps 22 open after sshd has left it.
 - `firewall` purges `iptables-persistent` and `netfilter-persistent`, which Ubuntu's ufw package
   cannot be installed alongside. ufw restores the rules on boot instead, `DOCKER-USER` included, and
   the drop of TCP packets that carry IPv4 header options moves to `/etc/ufw/before.init`, which ufw
@@ -39,8 +41,7 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
 - Dropped container traffic is logged, rate limited, with the prefix `[DOCKER-USER BLOCK]`.
 - The role no longer prints the rules at the end of a run. Use `ufw status` and
   `iptables --list DOCKER-USER`.
-- The lockout check reads the port sshd accepted the connection on, so it also covers a port set in
-  `~/.ssh/config`. Entries in the port lists that are not ports or ranges are rejected up front.
+- Entries in the port lists that are not ports or ranges are rejected up front.
 
 ### Fixed
 

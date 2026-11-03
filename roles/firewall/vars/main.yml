@@ -3,7 +3,11 @@
 # and the host's own listeners alike.
 firewall_ip_options_rule: --protocol tcp --match u32 --u32 0>>24&0xF=6:15 --jump DROP
 
-# The listed ports as port/proto, the form `ufw show added` prints them in.
+# ssh_port, and the port this play is connected on, which harden keeps sshd listening on until a run
+# connects over ssh_port. Opened whatever the lists say, so a run can never close its own connection.
+firewall_ssh_ports: "{{ ([ssh_port] + firewall_ssh_connection.stdout.split()[3:4]) | map('int') | unique | list }}"
+
+# The opened ports as port/proto, the form `ufw show added` prints them in.
 firewall_rules: >-
-  {{ (firewall_allowed_ports | map('regex_replace', '$', '/tcp') | list)
-     + (firewall_allowed_udp_ports | map('regex_replace', '$', '/udp') | list) }}
+  {{ (((firewall_allowed_ports + firewall_ssh_ports) | map('regex_replace', '$', '/tcp') | list)
+     + (firewall_allowed_udp_ports | map('regex_replace', '$', '/udp') | list)) | unique }}

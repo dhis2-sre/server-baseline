@@ -10,8 +10,8 @@
     that: (firewall_allowed_ports + firewall_allowed_udp_ports) | map('string') | reject('match', '^[0-9]+(:[0-9]+)?$') | list | length == 0
     fail_msg: firewall_allowed_ports and firewall_allowed_udp_ports take bare ports such as 443, or ranges such as 8000:8100.
 
-# The port sshd accepted this connection on, whatever the inventory or ~/.ssh/config says. Empty
-# when the play does not run over SSH.
+# The port sshd accepted this connection on, whatever the inventory or ~/.ssh/config says, which
+# firewall_ssh_ports opens. Empty when the play does not run over SSH.
 - name: Read the SSH port this play is connected on
   ansible.builtin.command: printenv SSH_CONNECTION
   register: firewall_ssh_connection
@@ -19,14 +19,6 @@
   failed_when: false
   check_mode: false
   become: false
-
-- name: Assert the SSH port this play connects on stays open
-  ansible.builtin.assert:
-    that: firewall_ssh_connection.stdout.split() | last | int in (firewall_allowed_ports | map('int') | list)
-    fail_msg: >-
-      This play is connected on port {{ firewall_ssh_connection.stdout.split() | last }}, which is not
-      in firewall_allowed_ports. Enabling the firewall would lock the host out.
-  when: firewall_ssh_connection.stdout | length > 0
 
 # Ubuntu's ufw package declares Breaks on both. Purged so the rules earlier versions of this role
 # saved under /etc/iptables go too.
