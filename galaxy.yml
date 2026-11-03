@@ -17,11 +17,12 @@ repository: https://github.com/dhis2-sre/server-baseline
 documentation: https://github.com/dhis2-sre/server-baseline/blob/master/README.md
 issues: https://github.com/dhis2-sre/server-baseline/issues
 
-# authorized_key, mount and sysctl are not in ansible-core. Installing the collection pulls this in,
-# which is what requirements.yml has to do by hand for consumers that put the roles on roles_path
+# authorized_key, mount, sysctl and ufw are not in ansible-core. Installing the collection pulls these
+# in, which is what requirements.yml has to do by hand for consumers that put the roles on roles_path
 # instead.
 dependencies:
   ansible.posix: '>=1.5.0'
+  community.general: '>=7.0.0'
 
 # Everything that supports the repository but is not part of what consumers install.
 build_ignore:

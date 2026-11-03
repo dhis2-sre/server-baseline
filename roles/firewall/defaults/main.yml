@@ -1,13 +1,18 @@
 # Default firewall configuration. Override per deployment in group_vars/all.yml.
 
-# Host-facing TCP ports opened in the DOCKER-USER chain.
-# 22 (SSH), 80 (HTTP -> redirected to HTTPS by Traefik), 443 (HTTPS).
+# Opened both for services on the host and for published container ports; everything else is
+# dropped. 22 (SSH), 80 (HTTP, needed for Let's Encrypt HTTP-01; see the README), 443 (HTTPS).
 firewall_allowed_ports:
   - 22
   - 80
   - 443
 
-# Host-facing UDP ports. 51820 is the WireGuard port; harmless if you run no
-# VPN, and the list can be emptied.
+# 51820 is the WireGuard port; harmless if you run no VPN, and the list can be emptied.
 firewall_allowed_udp_ports:
   - 51820
+
+# Bridges containers sit on. docker0 is the default bridge and br-+ matches every user defined
+# network. Add networks named with com.docker.network.bridge.name.
+firewall_docker_bridges:
+  - docker0
+  - br-+

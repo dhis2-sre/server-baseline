@@ -1,0 +1,4 @@
+# The listed ports as port/proto, the form `ufw show added` prints them in.
+firewall_rules: >-
+  {{ (firewall_allowed_ports | map('regex_replace', '$', '/tcp') | list)
+     + (firewall_allowed_udp_ports | map('regex_replace', '$', '/udp') | list) }}

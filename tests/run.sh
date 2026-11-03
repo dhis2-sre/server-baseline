@@ -15,7 +15,7 @@ trap 'rm --recursive --force -- "$work_dir"' EXIT
 
 ansible-galaxy collection build --output-path "$work_dir" -- "$repo_root"
 
-# Pulls ansible.posix in from galaxy.yml's dependencies, so this needs network.
+# Pulls ansible.posix and community.general in from galaxy.yml's dependencies, so this needs network.
 ansible-galaxy collection install --collections-path "$work_dir/collections" -- "$work_dir"/sre-server-*.tar.gz
 
 export ANSIBLE_COLLECTIONS_PATH="$work_dir/collections"

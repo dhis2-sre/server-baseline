@@ -24,15 +24,19 @@ namespace, and the same applies.
 | Role | What it does |
 |---|---|
 | `sre.server.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `sre.server.firewall` | Default deny ufw for services on the host, and a default deny `DOCKER-USER` chain for published container ports, both opening only the ports you list |
 | `sre.server.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
 | `sre.server.baseline` | All three of the above, in that order. No tasks of its own |
 
-The order matters: `bootstrap` installs the Docker Engine, `firewall` locks down the `DOCKER-USER`
-chain that installing it creates, and `harden` reconfigures the daemon and the host around both.
+The order matters: `bootstrap` installs the Docker Engine, `firewall` locks down the host and the
+`DOCKER-USER` chain that installing it creates, and `harden` reconfigures the daemon and the host
+around both.
 
-`firewall` exists because Docker bypasses the host's `INPUT` chain for published container ports, so
-host level rules never see that traffic. Do not put UFW or another frontend alongside it.
+`firewall` filters two paths. Services on the host are reached through the `INPUT` chain, which ufw
+manages. Published container ports bypass `INPUT`, because Docker rewrites their destination and
+forwards them, so the role also writes a `DOCKER-USER` chain into ufw's `after.rules`, which ufw
+restores on boot and on every reload. Do not add another firewall frontend or `iptables-persistent`,
+which Ubuntu's ufw package cannot be installed alongside.
 
 ## Consuming it
 
@@ -45,7 +49,7 @@ collections:
     version: v1.0.0
 ```
 
-Install it, and the `ansible.posix` dependency it declares comes with it:
+Install it, and the `ansible.posix` and `community.general` dependencies it declares come with it:
 
 ```bash
 ansible-galaxy collection install --requirements-file requirements.yml
@@ -96,7 +100,8 @@ collection installed, because it names its dependencies by their fully qualified
 roles_path = ./roles:./external/server-baseline/roles
 ```
 
-That route does not resolve `ansible.posix`, so install `requirements.yml` alongside it.
+That route does not resolve `ansible.posix` or `community.general`, so install `requirements.yml`
+alongside it.
 
 ## Variables
 
@@ -110,8 +115,34 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `deploy_dir` | `/opt/deploy` | bootstrap | Directory owned by `docker_user`. Point it wherever your project expects its checkout |
 | `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its compose stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |
-| `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | Host facing TCP ports |
-| `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | Host facing UDP ports. 51820 is WireGuard |
+| `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | TCP ports reachable from outside, both for services on the host and for published container ports. Must include the port Ansible connects on |
+| `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | UDP ports, opened the same way. 51820 is WireGuard |
+| `firewall_docker_bridges` | `[ docker0, br-+ ]` | firewall | Bridges containers sit on. Traffic leaving them is allowed, so containers reach the internet and each other. Add any network named with `com.docker.network.bridge.name`, or its containers can reach only listed ports |
+
+The port lists match the port a client connects to on the host, so a container published as
+`-p 443:8443` is opened by listing `443`. Removing a port from a list closes it on the next run. Rules
+added by hand with `ufw allow` are not touched, because the role only removes rules it tagged itself,
+but a hand added rule for a port you then list is tagged too, and closes when the port leaves the list.
+
+Traffic routed through the host rather than to it, such as a WireGuard VPN forwarding its clients,
+is denied by default. Allow it with `ufw route allow`, for example `ufw route allow in on wg0`.
+
+### Before you remove port 80
+
+With a default deny firewall, the port lists are the only thing deciding what is reachable, so make
+closing 80 a deliberate choice:
+
+- **HTTP-01 needs port 80.** Let's Encrypt validates the HTTP-01 challenge by connecting to port 80
+  on the domain, and it cannot be moved to another port. This is Traefik's `httpChallenge` and
+  certbot's `--webroot` and `--standalone` modes.
+- **Renewals fail weeks later, not at once.** Closing 80 on a host that already has certificates
+  breaks nothing immediately. The next renewal fails, and the site goes down when the current
+  certificate expires, long after anyone connects it with the firewall change.
+- **Alternatives without port 80:** TLS-ALPN-01 validates over 443 (Traefik's `tlsChallenge`), and
+  DNS-01 needs no inbound port at all and is the only challenge that issues wildcard certificates, at
+  the cost of DNS provider API credentials on the host.
+- **No HTTP to HTTPS redirect.** A visitor who types `http://` gets a refused connection instead of a
+  redirect. HSTS covers only returning visitors and preloaded domains.
 
 Operators are deliberately **not** added to the root equivalent `docker` group. Give them a scoped
 `sudo` rule for the command they need instead.
@@ -132,8 +163,9 @@ builds the collection and attaches the tarball to a GitHub release.
 
 ## Requirements
 
-- `ansible-core` 2.15 or newer on the control machine, plus the `ansible.posix` collection.
-  Installing this collection pulls it in; a `roles_path` checkout has to install `requirements.yml`.
+- `ansible-core` 2.15 or newer on the control machine, plus the `ansible.posix` and
+  `community.general` collections.
+  Installing this collection pulls them in; a `roles_path` checkout has to install `requirements.yml`.
 - Ubuntu 24.04 on the target.
 - **Connect as a non-root account with sudo.** `harden` sets `PermitRootLogin no` and reloads sshd, so
   a playbook run as `root` succeeds and then locks itself out. Create the account before the first
@@ -149,6 +181,12 @@ builds the collection and attaches the tarball to a GitHub release.
   container uid cannot traverse them.
 - **`/tmp` is mounted `noexec`.** Installers that unpack to `/tmp` and execute from there fail. Use
   `/usr/local/src` or similar.
+- **Containers reach services on the host through ufw too.** A container connecting to the host,
+  through `host.docker.internal`, the bridge gateway or the host's own address, is filtered like any
+  other client, so only listed ports answer. Open a port to containers alone with a rule such as
+  `ufw allow from 172.16.0.0/12 to any port 9100 proto tcp`. Docker allocates networks from
+  `172.16.0.0/12` and, once that runs out, from `192.168.0.0/16`, so a host with many networks may
+  need a second rule. The role leaves rules added by hand alone.
 - **IPv6 is disabled** by the sysctl list. Override those two keys if you publish AAAA records.
 - **`icc: false`** applies to the default bridge only. Containers on user defined networks, which is
   what compose creates, still reach each other.

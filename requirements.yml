@@ -1,10 +1,12 @@
-# ansible.posix supplies authorized_key, mount and sysctl, which ansible-core does not ship.
+# ansible.posix supplies authorized_key, mount and sysctl, and community.general supplies ufw, none
+# of which ansible-core ships.
 #
-# Installing the collection already pulls this in - it is declared in galaxy.yml under
-# `dependencies`, and ansible-galaxy resolves it. This file is for the other way of consuming these
+# Installing the collection already pulls these in - it is declared in galaxy.yml under
+# `dependencies`, and ansible-galaxy resolves them. This file is for the other way of consuming these
 # roles, where a project puts roles/ on its roles_path instead of installing the collection, and so
-# has to install the dependency itself:
+# has to install the dependencies itself:
 #
 #   ansible-galaxy collection install --requirements-file requirements.yml
 collections:
   - name: ansible.posix
+  - name: community.general
