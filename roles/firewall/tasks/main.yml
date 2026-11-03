@@ -1,139 +1,111 @@
-# Firewall hardening for Docker (DOCKER-USER chain)
+# Host services are reached through INPUT, which ufw filters. Published container ports are not:
+# Docker rewrites their destination in the nat table, so that traffic is forwarded and only crosses
+# DOCKER-USER, which the template filters. Both are driven by the same port lists.
 #
-# Background:
-# By default, Docker bypasses the host firewall rules (like UFW/iptables INPUT),
-# because published container ports are handled in the NAT table before reaching
-# the usual chains. This means host-level firewall rules don’t get applied to
-# container traffic.
-#
-# See https://docs.docker.com/engine/network/packet-filtering-firewalls/ for more details
-#
-# To fix this, Docker provides the `DOCKER-USER` chain. Every packet goes
-# through this chain before hitting Docker’s own rules, so it’s the right place
-# to enforce global allow/deny policies.
-#
-# What this playbook does:
-#  1. Debug/print existing rules so we can see the current firewall state.
-#  2. Allow traffic between Docker containers (172.16.0.0/12 covers all
-#     default bridge subnets that Docker might create).
-#  3. Explicitly allow only the host-facing ports we want open
-#     (`firewall_allowed_ports`, e.g. 22, 80, 443).
-#  4. Drop all other traffic at the end (default deny). The allow rules are
-#     inserted at the top of the chain, so one added on a later run still lands
-#     ahead of this drop.
-#  5. Drop IPv4 TCP packets that carry IP header options, in the raw
-#     PREROUTING chain so Docker's DNAT never sees them. No legitimate client
-#     sends them, and they are the trigger for CVE-2026-98432.
-#  6. Save rules so they persist across reboots (`netfilter-persistent`).
-#
-# Effectively, this gives you a "default deny" firewall posture while still
-# allowing Docker containers to talk to each other and exposing only the
-# services you choose.
+# See https://docs.docker.com/engine/network/packet-filtering-firewalls/
 
-- name: Debug existing DOCKER-USER rules
-  ansible.builtin.command: iptables --list DOCKER-USER --verbose
-  register: firewall_existing_rules
+# Anything else ends up verbatim in iptables-restore input, where ufw fails to load it.
+- name: Assert the listed ports are port numbers or ranges
+  ansible.builtin.assert:
+    that: (firewall_allowed_ports + firewall_allowed_udp_ports) | map('string') | reject('match', '^[0-9]+(:[0-9]+)?$') | list | length == 0
+    fail_msg: firewall_allowed_ports and firewall_allowed_udp_ports take bare ports such as 443, or ranges such as 8000:8100.
+
+# The port sshd accepted this connection on, whatever the inventory or ~/.ssh/config says. Empty
+# when the play does not run over SSH.
+- name: Read the SSH port this play is connected on
+  ansible.builtin.command: printenv SSH_CONNECTION
+  register: firewall_ssh_connection
   changed_when: false
+  failed_when: false
+  check_mode: false
+  become: false
+
+- name: Assert the SSH port this play connects on stays open
+  ansible.builtin.assert:
+    that: firewall_ssh_connection.stdout.split() | last | int in (firewall_allowed_ports | map('int') | list)
+    fail_msg: >-
+      This play is connected on port {{ firewall_ssh_connection.stdout.split() | last }}, which is not
+      in firewall_allowed_ports. Enabling the firewall would lock the host out.
+  when: firewall_ssh_connection.stdout | length > 0
+
+# Ubuntu's ufw package declares Breaks on both. Purged so the rules earlier versions of this role
+# saved under /etc/iptables go too.
+- name: Remove iptables-persistent
+  ansible.builtin.apt:
+    name:
+      - iptables-persistent
+      - netfilter-persistent
+    state: absent
+    purge: true
   become: true
 
-- name: Print existing DOCKER-USER rules
-  ansible.builtin.debug:
-    var: firewall_existing_rules.stdout_lines
-
-- name: Allow established/related traffic in DOCKER-USER chain
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    table: filter
-    ctstate: ESTABLISHED,RELATED
-    jump: ACCEPT
-    action: insert
-    rule_num: 1
-    comment: "Allow established/related container traffic"
-  become: true
-
-- name: Ensure Docker container subnet is allowed
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    source: 172.16.0.0/12
-    jump: ACCEPT
+- name: Ensure ufw is installed
+  ansible.builtin.apt:
+    name: ufw
     state: present
-    action: insert
-    comment: Allow all Docker containers. The 172.16.0.0/12 range covers all default Docker bridge networks (172.16.0.0–172.31.255.255) so future containers on new networks will automatically be allowed.
-    ip_version: ipv4
+  register: firewall_ufw_install
   become: true
 
-- name: Allow host-facing TCP ports
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    protocol: tcp
-    destination_port: "{{ item }}"
-    jump: ACCEPT
-    state: present
-    action: insert
-    comment: "Allow host port {{ item }}"
-    ip_version: ipv4
-  loop: "{{ firewall_allowed_ports }}"
+# Under --check on a host without ufw, which includes every host an earlier version of this role
+# managed, there are no rule files or ufw binary for these tasks to inspect.
+- name: Configure ufw
+  when: not (ansible_check_mode and firewall_ufw_install is changed)
   become: true
+  block:
+    - name: Write the DOCKER-USER rules into ufw's after rules
+      ansible.builtin.blockinfile:
+        path: "/etc/ufw/{{ item }}"
+        marker: "# {mark} sre.server.firewall DOCKER-USER"
+        block: "{{ lookup('ansible.builtin.template', 'docker-user.rules.j2') }}"
+      loop:
+        - after.rules
+        - after6.rules
+      notify: Reload ufw
 
-- name: Allow host-facing UDP ports
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    protocol: udp
-    destination_port: "{{ item }}"
-    jump: ACCEPT
-    state: present
-    action: insert
-    comment: "Allow host UDP port {{ item }}"
-    ip_version: ipv4
-  loop: "{{ firewall_allowed_udp_ports | default([]) }}"
-  become: true
+    - name: Set ufw default policies
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        default: "{{ item.policy }}"
+      loop:
+        - {direction: incoming, policy: deny}
+        - {direction: outgoing, policy: allow}
+        - {direction: routed, policy: deny}
 
-- name: Drop everything else
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    jump: DROP
-    state: present
-    # Appended, unlike the allow rules above, so it sits after them as the last rule in the chain.
-    action: append
-    comment: "Default drop"
-    ip_version: ipv4
-  become: true
+    # The comment is what the cleanup below uses to tell this role's rules from ones added by hand.
+    - name: Allow listed ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.split('/') | first }}"
+        proto: "{{ item.split('/') | last }}"
+        comment: sre.server.firewall
+      loop: "{{ firewall_rules }}"
 
-# ansible.builtin.iptables has no way to pass a u32 expression, so the rule goes in through the
-# command line, guarded by `--check` to keep the run idempotent.
-- name: Check for the IP options drop rule
-  ansible.builtin.command: iptables --table raw --check PREROUTING {{ firewall_ip_options_rule }}
-  register: firewall_ip_options_rule_check
-  changed_when: false
-  # 1 is "no such rule". Anything else is a broken rule specification, which must fail the run.
-  failed_when: firewall_ip_options_rule_check.rc not in [ 0, 1 ]
-  become: true
+    # Read only, so it also runs under --check, where the cleanup below needs its output.
+    - name: List the rules ufw has been given
+      ansible.builtin.command: ufw show added
+      register: firewall_ufw_added
+      changed_when: false
+      check_mode: false
 
-- name: Drop IPv4 TCP packets that carry IP header options
-  ansible.builtin.command: iptables --table raw --insert PREROUTING 1 {{ firewall_ip_options_rule }}
-  when: firewall_ip_options_rule_check.rc != 0
-  changed_when: true
-  become: true
+    - name: Close ports this role opened that are no longer listed
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.split('/') | first }}"
+        proto: "{{ item.split('/') | last }}"
+        delete: true
+      # Each line reads like: ufw allow 443/tcp comment 'sre.server.firewall'
+      loop: >-
+        {{ firewall_ufw_added.stdout_lines
+           | select('search', " comment 'sre\.server\.firewall'$")
+           | map('regex_replace', '^ufw allow (\S+) .*$', '\1')
+           | list
+           | difference(firewall_rules) }}
 
-- name: Ensure iptables-persistent is installed
-  ansible.builtin.package:
-    name: iptables-persistent
-    state: present
-  become: true
+    - name: Enable ufw
+      community.general.ufw:
+        state: enabled
 
-- name: Save iptables rules
-  ansible.builtin.command: netfilter-persistent save
-  # Writes the rules to disk every run. There is nothing to compare against, so it is reported as
-  # changed rather than pretending otherwise.
-  changed_when: true
-  become: true
-
-- name: Show final DOCKER-USER rules
-  ansible.builtin.command: iptables --list DOCKER-USER --verbose --line-numbers
-  register: firewall_final_rules
-  changed_when: false
-  become: true
-
-- name: Print final DOCKER-USER rules
-  ansible.builtin.debug:
-    var: firewall_final_rules.stdout_lines
+    - name: Start ufw on boot
+      ansible.builtin.service:
+        name: ufw
+        enabled: true

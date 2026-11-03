@@ -2,3 +2,8 @@
 # Raw PREROUTING sees a packet before Docker's DNAT, so one rule covers published container ports
 # and the host's own listeners alike.
 firewall_ip_options_rule: --protocol tcp --match u32 --u32 0>>24&0xF=6:15 --jump DROP
+
+# The listed ports as port/proto, the form `ufw show added` prints them in.
+firewall_rules: >-
+  {{ (firewall_allowed_ports | map('regex_replace', '$', '/tcp') | list)
+     + (firewall_allowed_udp_ports | map('regex_replace', '$', '/udp') | list) }}

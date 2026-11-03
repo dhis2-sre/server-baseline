@@ -8,6 +8,8 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
+These change what `firewall` and `harden` do to a host, so they ship as a major version.
+
 ### Added
 
 - Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
@@ -19,6 +21,32 @@ patches without rereading their group_vars.
 - **Breaking:** `harden` moves sshd to the new `ssh_port`, 822 by default (#23). The port the play
   connected on stays open too, so set `ansible_port` to `ssh_port`, open it in any provider firewall
   and run again to close the old one. fail2ban's `sshd` jail bans on the same ports.
+- `firewall` filters services running on the host, not only published container ports (#17). It
+  manages ufw, denying incoming and routed traffic and opening only `firewall_allowed_ports` and
+  `firewall_allowed_udp_ports`. **After upgrading, a host service on an unlisted port becomes
+  unreachable, from containers on the same host as well.** The play refuses to run if the port it
+  connects over is not listed.
+- `firewall` purges `iptables-persistent` and `netfilter-persistent`, which Ubuntu's ufw package
+  cannot be installed alongside. ufw restores the rules on boot instead, `DOCKER-USER` included.
+- `DOCKER-USER` lets container traffic out by bridge interface (`firewall_docker_bridges`) instead
+  of allowing the `172.16.0.0/12` source range, which also let in any client in that range. Listed
+  ports RETURN to Docker's own rules instead of being accepted, so only published ports are reachable.
+- Traffic routed through the host is denied by default and needs a `ufw route allow` rule. The old
+  chain let routed traffic through to ports 22, 80 and 443 only because it matched those ports
+  after address translation, so a WireGuard VPN forwarding its clients stops working on upgrade.
+- Dropped container traffic is logged, rate limited, with the prefix `[DOCKER-USER BLOCK]`.
+- The role no longer prints the rules at the end of a run. Use `ufw status` and
+  `iptables --list DOCKER-USER`.
+- The lockout check reads the port sshd accepted the connection on, so it also covers a port set in
+  `~/.ssh/config`. Entries in the port lists that are not ports or ranges are rejected up front.
+
+### Fixed
+
+- `DOCKER-USER` matched `--dport`, which is the container's port by then, so `-p 443:8443` was
+  blocked with 443 listed and `-p 8080:80` was open with 8080 unlisted. It now matches
+  `--ctorigdstport`, the port the client connected to.
+- Removing a port from the lists now closes it. Rules added by hand with `ufw allow` are left alone.
+- `DOCKER-USER` is written for IPv6 as well as IPv4.
 
 ## 1.1.0
 
