@@ -4,6 +4,9 @@
 allowed_ssh_users:
   - ubuntu
 
+# The port sshd listens on. Below 1024, so only root can bind it.
+ssh_port: 822
+
 # The user namespace remap target written to /etc/subuid, /etc/subgid and
 # /etc/docker/daemon.json, and appended to allowed_ssh_users.
 # Repeated from the bootstrap role's defaults, with the same value, so that this

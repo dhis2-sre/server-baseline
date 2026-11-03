@@ -8,6 +8,12 @@ patches without rereading their group_vars.
 
 ## 1.1.0
 
+### Changed
+
+- **Breaking:** `harden` moves sshd to the new `ssh_port`, 822 by default (#23). The port the play
+  connected on stays open too, so set `ansible_port` to `ssh_port`, open it in any provider firewall
+  and run again to close the old one. fail2ban's `sshd` jail bans on the same ports.
+
 ### Fixed
 
 - `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
