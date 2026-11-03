@@ -8,6 +8,23 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
+### Added
+
+- Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
+  connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
+  describes (#14).
+
+## 1.1.0
+
+### Changed
+
+- **Breaking:** `harden` sets `PermitRootLogin`, `PasswordAuthentication` and the new
+  `KbdInteractiveAuthentication` to `no` in `/etc/ssh/sshd_config.d/00-hardening.conf` instead of in
+  `sshd_config`, where any drop-in setting the same keyword, such as cloud-init's
+  `50-cloud-init.conf` with `PasswordAuthentication yes`, silently overrode them. Hosts where that
+  kept password logins working lose them. sshd is now reloaded on every run, and the role fails if
+  `sshd -T` shows the settings are not in effect (#15).
+
 ### Fixed
 
 - `firewall` inserts its allow rules at the top of `DOCKER-USER` instead of appending them, so a port
@@ -34,9 +51,10 @@ patches without rereading their group_vars.
 
 ### Added
 
-- Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
-  connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
-  describes (#14).
+- `firewall` drops IPv4 TCP packets that carry IP header options, in the raw `PREROUTING` chain
+  ahead of Docker's DNAT so it covers published container ports and the host's own listeners. No
+  legitimate client sends them, and they trigger CVE-2026-98432, a remote use-after-free in the
+  IPv4 TCP handshake with no fixed Ubuntu 24.04 kernel yet.
 - `harden_docker_daemon_config`, the path the Docker daemon settings are merged into. It defaults
   to `/etc/docker/daemon.json` and exists for the tests.
 - `tests/docker-daemon.yml`, run by `tests/run.sh`, which applies those tasks to a scratch file and

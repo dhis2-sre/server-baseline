@@ -25,7 +25,7 @@ namespace, and the same applies.
 | Role | What it does |
 |---|---|
 | `sre.server.bootstrap` | Base packages, Docker Engine and the compose plugin from Docker's apt repository, the operator account, and `deploy_dir` |
-| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, persisted with `netfilter-persistent` |
+| `sre.server.firewall` | Default deny `DOCKER-USER` chain, allowing only the ports you list plus inter-container traffic, plus a drop of TCP packets that carry IPv4 header options, persisted with `netfilter-persistent` |
 | `sre.server.harden` | SSH, kernel, AppArmor, fail2ban and Docker daemon hardening, including user namespace remapping |
 | `sre.server.baseline` | All three of the above, in that order. No tasks of its own |
 
@@ -162,6 +162,12 @@ builds the collection and attaches the tarball to a GitHub release.
 - **The SSH tasks validate with `sshd -t`**, which needs `/run/sshd` to exist. Every booted host has
   it, but a container or a chroot where sshd has never started does not, and the play fails there
   rather than writing a config it could not check.
+- **`PermitRootLogin`, `PasswordAuthentication` and `KbdInteractiveAuthentication` are set in
+  `/etc/ssh/sshd_config.d/00-hardening.conf`**, which sorts ahead of the drop-ins Ubuntu and
+  cloud-init ship, and `harden` fails if `sshd -T` shows any of them is not `no`. Password logins
+  over SSH stop working even where a provider's cloud-init had kept them on, so connect with a key,
+  including from your Ansible inventory. A `Match` block, in `sshd_config` or a drop-in, can still
+  re-enable passwords for the connections it matches; the check reads the global settings only.
 
 ## Development
 

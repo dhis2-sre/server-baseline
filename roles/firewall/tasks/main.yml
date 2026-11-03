@@ -21,7 +21,10 @@
 #  4. Drop all other traffic at the end (default deny). The allow rules are
 #     inserted at the top of the chain, so one added on a later run still lands
 #     ahead of this drop.
-#  5. Save rules so they persist across reboots (`netfilter-persistent`).
+#  5. Drop IPv4 TCP packets that carry IP header options, in the raw
+#     PREROUTING chain so Docker's DNAT never sees them. No legitimate client
+#     sends them, and they are the trigger for CVE-2026-98432.
+#  6. Save rules so they persist across reboots (`netfilter-persistent`).
 #
 # Effectively, this gives you a "default deny" firewall posture while still
 # allowing Docker containers to talk to each other and exposing only the
@@ -94,6 +97,22 @@
     action: append
     comment: "Default drop"
     ip_version: ipv4
+  become: true
+
+# ansible.builtin.iptables has no way to pass a u32 expression, so the rule goes in through the
+# command line, guarded by `--check` to keep the run idempotent.
+- name: Check for the IP options drop rule
+  ansible.builtin.command: iptables --table raw --check PREROUTING {{ firewall_ip_options_rule }}
+  register: firewall_ip_options_rule_check
+  changed_when: false
+  # 1 is "no such rule". Anything else is a broken rule specification, which must fail the run.
+  failed_when: firewall_ip_options_rule_check.rc not in [ 0, 1 ]
+  become: true
+
+- name: Drop IPv4 TCP packets that carry IP header options
+  ansible.builtin.command: iptables --table raw --insert PREROUTING 1 {{ firewall_ip_options_rule }}
+  when: firewall_ip_options_rule_check.rc != 0
+  changed_when: true
   become: true
 
 - name: Ensure iptables-persistent is installed
