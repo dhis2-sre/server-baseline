@@ -14,6 +14,12 @@ patches without rereading their group_vars.
   connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
   describes (#14).
 
+### Fixed
+
+- `harden` writes its kernel parameters to `/etc/sysctl.d/99-sre-server-hardening.conf` instead of
+  `/etc/sysctl.conf`, which Ubuntu 26.04 no longer reads at boot, so there they were lost on every
+  reboot. It removes them from `/etc/sysctl.conf`, which 24.04 still applies after the drop-in.
+
 ## 1.1.0
 
 ### Changed
