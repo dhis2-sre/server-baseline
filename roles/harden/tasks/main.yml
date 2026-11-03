@@ -89,6 +89,9 @@
       | map('regex_replace', '^allowusers ', '') | list }}
   when: not ansible_check_mode
 
+- name: Move sshd to ssh_port
+  ansible.builtin.import_tasks: ssh-port.yml
+
 # Minimize Attack Surface
 - name: Remove unnecessary packages
   ansible.builtin.apt:
@@ -124,6 +127,15 @@
   ansible.builtin.apt:
     name: fail2ban
     state: present
+  notify: Restart fail2ban
+
+- name: Point fail2ban's sshd jail at the SSH ports
+  ansible.builtin.template:
+    src: fail2ban-sshd.local.j2
+    dest: /etc/fail2ban/jail.d/sre-server-sshd.local
+    owner: root
+    group: root
+    mode: '0644'
   notify: Restart fail2ban
 
 # Started rather than restarted, so a run with nothing to change leaves fail2ban watching the logs.

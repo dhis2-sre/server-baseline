@@ -14,6 +14,12 @@ patches without rereading their group_vars.
   connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
   describes (#14).
 
+### Changed
+
+- **Breaking:** `harden` moves sshd to the new `ssh_port`, 822 by default (#23). The port the play
+  connected on stays open too, so set `ansible_port` to `ssh_port`, open it in any provider firewall
+  and run again to close the old one. fail2ban's `sshd` jail bans on the same ports.
+
 ## 1.1.0
 
 ### Changed
