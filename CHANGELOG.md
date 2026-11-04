@@ -6,7 +6,7 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
-## Unreleased
+## 2.0.0
 
 These change what `firewall` and `harden` do to a host, so they ship as a major version.
 
@@ -39,6 +39,8 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
   chain let routed traffic through to ports 22, 80 and 443 only because it matched those ports
   after address translation, so a WireGuard VPN forwarding its clients stops working on upgrade.
 - Dropped container traffic is logged, rate limited, with the prefix `[DOCKER-USER BLOCK]`.
+- `harden` stops and masks `apport.service` where it exists. Ubuntu's crash reporter set
+  `fs.suid_dumpable` back to 2 on every boot, over the 0 `harden` sets. The packages stay installed.
 - ufw no longer applies `/etc/ufw/sysctl.conf` (`IPT_SYSCTL=` in `/etc/default/ufw`), which on every
   start and reload set `log_martians` back to 0 over `harden`'s kernel parameters.
 - The role no longer prints the rules at the end of a run. Use `ufw status` and

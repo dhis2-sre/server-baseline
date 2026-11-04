@@ -124,6 +124,20 @@
       - dnsutils
     state: absent
 
+# apport, Ubuntu's crash reporter, sets fs.suid_dumpable to 2 every time its service starts, boot
+# included, over the 0 set below. Masked rather than removed, because ubuntu-server depends on the
+# package. Masking also keeps a package upgrade from starting it again.
+- name: Read the services on the host
+  ansible.builtin.service_facts:
+
+- name: Stop apport from resetting fs.suid_dumpable
+  ansible.builtin.systemd_service:
+    name: apport.service
+    state: stopped
+    enabled: false
+    masked: true
+  when: "'apport.service' in ansible_facts.services"
+
 # Secure /tmp
 - name: Secure /tmp partition
   ansible.posix.mount:
