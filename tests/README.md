@@ -9,7 +9,7 @@ tests/run.sh
 ```
 
 It needs `ansible-core` and network access, since installing the collection also resolves the
-`ansible.posix` dependency declared in `galaxy.yml`. CI runs it on every push and pull request.
+`ansible.posix` and `community.general` dependencies declared in `galaxy.yml`. CI runs it on every push and pull request.
 
 It deliberately checks the things linting the working tree cannot:
 

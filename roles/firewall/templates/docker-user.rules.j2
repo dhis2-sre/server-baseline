@@ -1,0 +1,26 @@
+# Managed by sre.server.firewall; the next run overwrites changes made here.
+*filter
+:DOCKER-USER - [0:0]
+:docker-user-deny - [0:0]
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+{% for bridge in firewall_docker_bridges %}
+-A DOCKER-USER -i {{ bridge }} -j RETURN
+{% endfor %}
+# Docker has already rewritten the destination by now, so --dport would match the container's port.
+# --ctorigdstport matches the port the client connected to. RETURN, not ACCEPT, so Docker's own
+# chains still decide whether anything is published there.
+{% for port in firewall_allowed_ports %}
+-A DOCKER-USER -p tcp -m conntrack --ctorigdstport {{ port }} --ctdir ORIGINAL -j RETURN
+{% endfor %}
+{% for port in firewall_allowed_udp_ports %}
+-A DOCKER-USER -p udp -m conntrack --ctorigdstport {{ port }} --ctdir ORIGINAL -j RETURN
+{% endfor %}
+{% for bridge in firewall_docker_bridges %}
+-A DOCKER-USER -o {{ bridge }} -j docker-user-deny
+{% endfor %}
+# Published ports on any other network, such as one with a custom bridge name.
+-A DOCKER-USER -m conntrack --ctstate DNAT -j docker-user-deny
+-A docker-user-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[DOCKER-USER BLOCK] "
+-A docker-user-deny -j DROP
+COMMIT
