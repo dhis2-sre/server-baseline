@@ -166,41 +166,31 @@
     state: started
     enabled: true
 
+# Written to a drop-in rather than /etc/sysctl.conf, which Ubuntu 26.04 no longer reads at boot. The
+# name sorts after Ubuntu's own sysctl.d files, such as 10-network-security.conf on 24.04 and
+# 55-network-security.conf on 26.04, which set rp_filter to 2, so these values win at boot.
 - name: Set kernel parameters for hardening
   ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-sre-server-hardening.conf
     state: present
-  loop:
-    # Enables TCP SYN cookies to help prevent SYN flood attacks
-    - {key: "net.ipv4.tcp_syncookies", value: "1"}
-    # Enables reverse path filtering to mitigate IP spoofing
-    - {key: "net.ipv4.conf.all.rp_filter", value: "1"}
-    # Ensures all newly created interfaces also enforce IP spoofing prevention, complementing net.ipv4.conf.all.rp_filter
-    - {key: "net.ipv4.conf.default.rp_filter", value: "1"}
-    # Disables source routing, which is often exploited for attacks
-    - {key: "net.ipv4.conf.all.accept_source_route", value: "0"}
-    # Ignores ICMP echo requests sent to broadcast addresses to prevent smurf attacks
-    - {key: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1"}
-    # Logs packets with invalid IP addresses for easier troubleshooting and detection of potential attacks
-    - {key: "net.ipv4.conf.all.log_martians", value: "1"}
-    # IP forwarding is required for proper network traffic forwarding in a multi-node setup
-    - {key: "net.ipv4.ip_forward", value: "1"}
-    # Ensures any newly added interfaces also reject source-routed packets by default, maintaining a secure baseline
-    - {key: "net.ipv4.conf.default.accept_source_route", value: "0"}
-    # Randomizes the memory address space of processes, making it significantly harder for attackers to predict addresses during exploitation attempts, such as buffer overflows
-    - {key: "kernel.randomize_va_space", value: "2"}
-    # Prevents sensitive information (like passwords or cryptographic keys) from being leaked through core dumps, which can be exploited by attackers to gain further system access
-    - {key: "fs.suid_dumpable", value: "0"}
-    # Disable IPv6
-    - {key: "net.ipv6.conf.all.disable_ipv6", value: "1"}
-    - {key: "net.ipv6.conf.default.disable_ipv6", value: "1"}
-    # Disabling ICMP redirects
-    - {key: "net.ipv4.conf.all.accept_redirects", value: "0"}
-    - {key: "net.ipv4.conf.default.accept_redirects", value: "0"}
-    # Prevent multiple kinds of attacks
-    - {key: "net.ipv4.conf.all.secure_redirects", value: "0"}
-    - {key: "net.ipv4.conf.default.secure_redirects", value: "0"}
+  loop: "{{ harden_kernel_parameters }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# Earlier versions wrote these to /etc/sysctl.conf. 24.04 still applies that file at boot, through
+# 99-sysctl.conf, after the drop-in above, so a value left there would win over a changed one. A
+# missing file is left alone.
+- name: Remove the kernel parameters earlier versions wrote to /etc/sysctl.conf
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    sysctl_file: /etc/sysctl.conf
+    state: absent
+    reload: false
+  loop: "{{ harden_kernel_parameters }}"
+  loop_control:
+    label: "{{ item.key }}"
 
 # Docker-specific hardening
 - name: Configure subuid for user namespace remapping

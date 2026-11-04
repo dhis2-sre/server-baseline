@@ -52,6 +52,9 @@ These change what `firewall` and `harden` do to a host, so they ship as a major 
   `--ctorigdstport`, the port the client connected to.
 - Removing a port from the lists now closes it. Rules added by hand with `ufw allow` are left alone.
 - `DOCKER-USER` is written for IPv6 as well as IPv4.
+- `harden` writes its kernel parameters to `/etc/sysctl.d/99-sre-server-hardening.conf` instead of
+  `/etc/sysctl.conf`, which Ubuntu 26.04 no longer reads at boot, so there they were lost on every
+  reboot. It removes them from `/etc/sysctl.conf`, which 24.04 still applies after the drop-in.
 
 ## 1.1.0
 
