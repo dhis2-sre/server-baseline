@@ -10,6 +10,12 @@
 # run together or on their own.
 docker_user: "{{ ansible_user }}"
 
+# Supplementary groups a dedicated docker_user is added to. It is only ever added, never removed from
+# a group it is already in. Set it to [] for an account that should have none, such as one CI logs in
+# as with a locked password.
+docker_user_groups:
+  - sudo
+
 # Directory owned by docker_user, where the consuming project keeps whatever it
 # deploys. Set it to wherever your project expects its checkout.
 deploy_dir: /opt/deploy

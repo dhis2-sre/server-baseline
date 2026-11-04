@@ -115,6 +115,7 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `docker_user` | inventory `ansible_user` | bootstrap, harden | Owns `deploy_dir` and is the user namespace remap target. Set it to a dedicated account to have one created |
 | `docker_user_password` | none | bootstrap | Pre-hashed, required only when `docker_user` is a dedicated account. `!` locks the password, which is what a service account wants |
 | `docker_user_ssh_key` | none | bootstrap | Optional public key for a dedicated operator account |
+| `docker_user_groups` | `[ sudo ]` | bootstrap | Supplementary groups a dedicated `docker_user` is added to. `[]` adds none |
 | `deploy_dir` | `/opt/deploy` | bootstrap | Directory owned by `docker_user`. Point it wherever your project expects its checkout |
 | `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its compose stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |

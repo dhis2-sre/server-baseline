@@ -6,6 +6,15 @@ The collection follows [semantic versioning](https://semver.org). A breaking cha
 variables or to what it does to a host is a major version, so consumers pinning `v1.x` can take
 patches without rereading their group_vars.
 
+## 2.1.0
+
+### Added
+
+- `docker_user_groups` sets the supplementary groups `bootstrap` adds a dedicated `docker_user` to.
+  It defaults to `[ sudo ]`, as before. A consumer that keeps the account out of `sudo` set it to
+  `[]` instead of removing it again in its own play, which made both tasks report a change on every
+  run.
+
 ## 2.0.0
 
 These change what `firewall` and `harden` do to a host, so they ship as a major version.

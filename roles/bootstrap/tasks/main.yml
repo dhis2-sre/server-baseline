@@ -53,7 +53,7 @@
     name: "{{ docker_user }}"
     password: "{{ docker_user_password }}"
     update_password: on_create
-    groups: sudo
+    groups: "{{ docker_user_groups }}"
     append: true
     shell: /bin/bash
     create_home: true
