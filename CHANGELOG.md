@@ -8,14 +8,50 @@ patches without rereading their group_vars.
 
 ## Unreleased
 
+These change what `firewall` and `harden` do to a host, so they ship as a major version.
+
 ### Added
 
 - Ubuntu 26.04 (resolute) as a supported target alongside 24.04. The roles needed no changes, but a
   connecting account that needs a sudo password has to become with `sudo.ws` there, as the README
   describes (#14).
 
+### Changed
+
+- **Breaking:** `harden` moves sshd to the new `ssh_port`, 822 by default (#23). The port the play
+  connected on stays open too, in sshd and in `firewall`, so set `ansible_port` to `ssh_port`, open
+  it in any provider firewall and run again to close the old one. fail2ban's `sshd` jail bans on the
+  same ports.
+- `firewall` filters services running on the host, not only published container ports (#17). It
+  manages ufw, denying incoming and routed traffic and opening only `firewall_allowed_ports` and
+  `firewall_allowed_udp_ports`. **After upgrading, a host service on an unlisted port becomes
+  unreachable, from containers on the same host as well.** It opens `ssh_port` and the port the play
+  is connected on by itself, so `firewall_allowed_ports` defaults to `[ 80, 443 ]` and a list that
+  still has 22 in it keeps 22 open after sshd has left it.
+- `firewall` purges `iptables-persistent` and `netfilter-persistent`, which Ubuntu's ufw package
+  cannot be installed alongside. ufw restores the rules on boot instead, `DOCKER-USER` included, and
+  the drop of TCP packets that carry IPv4 header options moves to `/etc/ufw/before.init`, which ufw
+  runs on boot and on every reload. The role owns that file and replaces it.
+- `DOCKER-USER` lets container traffic out by bridge interface (`firewall_docker_bridges`) instead
+  of allowing the `172.16.0.0/12` source range, which also let in any client in that range. Listed
+  ports RETURN to Docker's own rules instead of being accepted, so only published ports are reachable.
+- Traffic routed through the host is denied by default and needs a `ufw route allow` rule. The old
+  chain let routed traffic through to ports 22, 80 and 443 only because it matched those ports
+  after address translation, so a WireGuard VPN forwarding its clients stops working on upgrade.
+- Dropped container traffic is logged, rate limited, with the prefix `[DOCKER-USER BLOCK]`.
+- ufw no longer applies `/etc/ufw/sysctl.conf` (`IPT_SYSCTL=` in `/etc/default/ufw`), which on every
+  start and reload set `log_martians` back to 0 over `harden`'s kernel parameters.
+- The role no longer prints the rules at the end of a run. Use `ufw status` and
+  `iptables --list DOCKER-USER`.
+- Entries in the port lists that are not ports or ranges are rejected up front.
+
 ### Fixed
 
+- `DOCKER-USER` matched `--dport`, which is the container's port by then, so `-p 443:8443` was
+  blocked with 443 listed and `-p 8080:80` was open with 8080 unlisted. It now matches
+  `--ctorigdstport`, the port the client connected to.
+- Removing a port from the lists now closes it. Rules added by hand with `ufw allow` are left alone.
+- `DOCKER-USER` is written for IPv6 as well as IPv4.
 - `harden` writes its kernel parameters to `/etc/sysctl.d/99-sre-server-hardening.conf` instead of
   `/etc/sysctl.conf`, which Ubuntu 26.04 no longer reads at boot, so there they were lost on every
   reboot. It removes them from `/etc/sysctl.conf`, which 24.04 still applies after the drop-in.

@@ -1,0 +1,14 @@
+#!/bin/sh
+# {{ ansible_managed }}
+#
+# ufw runs this with "start" before it loads its rules, on boot and on every reload. It holds the raw
+# table rule, which ufw's rule files would add again on every reload, because ufw loads them without
+# flushing the raw table. "stop" leaves the rule in place, so it keeps dropping while ufw reloads and
+# also while ufw is disabled.
+set -e
+{% set rule = firewall_ip_options_rule.split() | map('quote') | join(' ') %}
+
+if [ "$1" = start ]; then
+    iptables --table raw --check PREROUTING {{ rule }} 2>/dev/null \
+        || iptables --table raw --insert PREROUTING 1 {{ rule }}
+fi
