@@ -111,6 +111,7 @@ Every variable has a default. Override in `group_vars/all.yml`.
 | `deploy_dir` | `/opt/deploy` | bootstrap | Directory owned by `docker_user`. Point it wherever your project expects its checkout |
 | `bootstrap_packages` | see defaults | bootstrap | Base packages. Includes `make` because one consumer drives its compose stacks with a Makefile on the host, and `python3-debian` because the repository module needs it |
 | `allowed_ssh_users` | `[ ubuntu ]` | harden | SSH `AllowUsers`. `docker_user` is appended automatically |
+| `ssh_port` | `822` | harden | Port sshd listens on. Keep it below 1024, so only root can bind it |
 | `firewall_allowed_ports` | `[ 22, 80, 443 ]` | firewall | Host facing TCP ports |
 | `firewall_allowed_udp_ports` | `[ 51820 ]` | firewall | Host facing UDP ports. 51820 is WireGuard |
 
@@ -168,6 +169,9 @@ builds the collection and attaches the tarball to a GitHub release.
   over SSH stop working even where a provider's cloud-init had kept them on, so connect with a key,
   including from your Ansible inventory. A `Match` block, in `sshd_config` or a drop-in, can still
   re-enable passwords for the connections it matches; the check reads the global settings only.
+- **sshd moves to `ssh_port`, 822 by default, over two runs.** The first keeps the port it connected
+  on open as well. Open `ssh_port` in any provider firewall and set `ansible_port` to it, and the
+  second run closes the old port. Any other `Port` line in `sshd_config` or a drop-in fails the run.
 
 ## Development
 

@@ -35,6 +35,22 @@
 # file rather than taking the first value, so drop-in order does not change what it allows. It is
 # appended to the end of the file, though, which puts it inside a Match block if the file ends with
 # one, so the check below also confirms it applies globally.
+# sshd listens on ssh_port. The port this play is connected on stays open alongside it, so the move
+# takes two runs and never strands the play: the second, with ansible_port set to ssh_port, closes the
+# old port. "client_ip client_port server_ip server_port", read without become, which drops it, and
+# empty for a local connection.
+- name: Read the port this play is connected on
+  ansible.builtin.command: printenv SSH_CONNECTION
+  become: false
+  register: harden_ssh_connection
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Work out the ports sshd listens on
+  ansible.builtin.set_fact:
+    harden_ssh_ports: "{{ ([ssh_port] + harden_ssh_connection.stdout.split()[3:4]) | map('int') | unique | sort }}"
+
 - name: Write the SSH hardening drop-in
   ansible.builtin.template:
     src: sshd-hardening.conf.j2
@@ -76,18 +92,25 @@
       - "'passwordauthentication no' in harden_sshd_effective.stdout_lines"
       - "'kbdinteractiveauthentication no' in harden_sshd_effective.stdout_lines"
       - (allowed_ssh_users + [docker_user]) | unique | difference(harden_sshd_allowusers) | length == 0
+      - harden_sshd_ports == harden_ssh_ports
     fail_msg: >-
       sshd's effective configuration is not hardened: `sshd -T` shows
       {{ harden_sshd_effective.stdout_lines
-      | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|allowusers) ')
+      | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|allowusers|port) ')
       | join(', ') }}. A drop-in sorting before 00-hardening.conf or a `Match all` block may override
-      the first three, and AllowUsers is missing when it ended up inside a Match block at the end of
-      sshd_config.
+      the first three, AllowUsers is missing when it ended up inside a Match block at the end of
+      sshd_config, and Port adds up across files, so a Port line anywhere else keeps its port open.
   vars:
     harden_sshd_allowusers: >-
       {{ harden_sshd_effective.stdout_lines | select('match', '^allowusers ')
       | map('regex_replace', '^allowusers ', '') | list }}
+    harden_sshd_ports: >-
+      {{ harden_sshd_effective.stdout_lines | select('match', '^port ')
+      | map('regex_replace', '^port ', '') | map('int') | unique | sort }}
   when: not ansible_check_mode
+
+- name: Move sshd to ssh_port
+  ansible.builtin.import_tasks: ssh-port.yml
 
 # Minimize Attack Surface
 - name: Remove unnecessary packages
@@ -124,6 +147,15 @@
   ansible.builtin.apt:
     name: fail2ban
     state: present
+  notify: Restart fail2ban
+
+- name: Point fail2ban's sshd jail at the SSH ports
+  ansible.builtin.template:
+    src: fail2ban-sshd.local.j2
+    dest: /etc/fail2ban/jail.d/sre-server-sshd.local
+    owner: root
+    group: root
+    mode: '0644'
   notify: Restart fail2ban
 
 # Started rather than restarted, so a run with nothing to change leaves fail2ban watching the logs.

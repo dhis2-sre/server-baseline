@@ -1,0 +1,49 @@
+# Moves the sshd listener onto harden_ssh_ports, which main.yml has already written into the
+# hardening drop-in and checked with `sshd -T`.
+#
+# Ubuntu 24.04 starts sshd from ssh.socket, whose ports sshd-socket-generator takes from the Port
+# lines on a daemon-reload, so only restarting the socket moves them. That restarts ssh.service too,
+# but KillMode=process keeps open sessions, this play's included.
+
+# Compared with what sshd listens on rather than notified, so a run that stopped before applying the
+# drop-in is caught up by the next one.
+- name: Read the ports sshd is listening on
+  ansible.builtin.command: ss --no-header --listening --tcp --numeric --processes
+  register: harden_ssh_listening
+  changed_when: false
+  check_mode: false
+
+- name: Read whether sshd is socket activated
+  ansible.builtin.systemd_service:
+    name: ssh.socket
+  register: harden_ssh_socket
+
+# Without socket activation, a reload re-executes sshd, which binds the new ports itself.
+- name: Move sshd onto the SSH ports
+  ansible.builtin.systemd_service:
+    name: "{{ 'ssh.socket' if harden_ssh_socket_active else 'ssh' }}"
+    state: "{{ 'restarted' if harden_ssh_socket_active else 'reloaded' }}"
+    daemon_reload: true
+  when: harden_ssh_listening_ports != harden_ssh_ports
+  vars: &harden_ssh_listening_vars
+    harden_ssh_socket_active: "{{ harden_ssh_socket.status.ActiveState == 'active' }}"
+    harden_ssh_listening_ports: >-
+      {{ harden_ssh_listening.stdout_lines | select('search', '"sshd"')
+      | map('split') | map(attribute=3) | map('regex_replace', '^.*:', '') | map('int') | unique | sort }}
+
+- name: Wait for sshd to listen on exactly the SSH ports
+  ansible.builtin.command: ss --no-header --listening --tcp --numeric --processes
+  register: harden_ssh_listening
+  changed_when: false
+  until: harden_ssh_listening_ports == harden_ssh_ports
+  retries: 10
+  delay: 1
+  vars: *harden_ssh_listening_vars
+  when: not ansible_check_mode
+
+- name: Report the SSH port cutover still to do
+  ansible.builtin.debug:
+    msg: >-
+      sshd listens on {{ harden_ssh_ports | join(' and ') }}. Set ansible_port to {{ ssh_port }} in
+      the inventory, open {{ ssh_port }} in any provider firewall, and run again to close the rest.
+  when: harden_ssh_ports | length > 1

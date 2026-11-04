@@ -1,0 +1,3 @@
+# {{ ansible_managed }}
+[sshd]
+port = {{ harden_ssh_ports | join(',') }}
